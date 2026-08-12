@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from "react-router-dom";
 
 export default function Footer() {
   return (
@@ -14,7 +14,9 @@ export default function Footer() {
               <span className="font-bold text-white text-base">Thi Vận AI</span>
             </div>
             <p className="text-sm text-[#969ca7] leading-relaxed max-w-xs">
-              Ứng dụng sinh thơ tiếng Việt sử dụng Retrieval-Augmented Generation, kết hợp kho thi ca phong phú với mô hình ngôn ngữ hiện đại.
+              Ứng dụng sinh thơ tiếng Việt sử dụng Retrieval-Augmented
+              Generation, kết hợp kho thi ca phong phú với mô hình ngôn ngữ hiện
+              đại.
             </p>
           </div>
 
@@ -22,16 +24,28 @@ export default function Footer() {
           <div>
             <h3 className="text-white font-semibold text-sm mb-3">Khám phá</h3>
             <nav aria-label="Liên kết footer" className="flex flex-col gap-2">
-              <Link to="/cach-hoat-dong" className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded">
+              <Link
+                to="/cach-hoat-dong"
+                className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded"
+              >
                 Cách hoạt động
               </Link>
-              <Link to="/ve-du-an" className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded">
+              <Link
+                to="/ve-du-an"
+                className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded"
+              >
                 Về dự án
               </Link>
-              <Link to="/sang-tac" className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded">
+              <Link
+                to="/sang-tac"
+                className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded"
+              >
                 Bắt đầu sáng tác
               </Link>
-              <Link to="/nghien-cuu" className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded">
+              <Link
+                to="/nghien-cuu"
+                className="text-sm text-[#969ca7] hover:text-[#f4f2ed] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded"
+              >
                 Chế độ nghiên cứu
               </Link>
             </nav>
@@ -59,5 +73,5 @@ export default function Footer() {
         </div>
       </div>
     </footer>
-  )
+  );
 }

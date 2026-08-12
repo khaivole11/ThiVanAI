@@ -1,22 +1,27 @@
-import Badge from './Badge'
-import type { SourcePoem } from '../types'
+import Badge from "./Badge";
+import type { SourcePoem } from "../types";
 
 interface SourceCardProps {
-  source: SourcePoem
-  onViewDetail?: (source: SourcePoem) => void
-  showScores?: boolean
-  compact?: boolean
+  source: SourcePoem;
+  onViewDetail?: (source: SourcePoem) => void;
+  showScores?: boolean;
+  compact?: boolean;
 }
 
-const matchTagVariants: Record<string, 'accent' | 'secondary' | 'default'> = {
-  'same-form': 'accent',
-  'same-author': 'secondary',
-  'same-period': 'secondary',
-  'similar-content': 'default',
-  'similar-imagery': 'default',
-}
+const matchTagVariants: Record<string, "accent" | "secondary" | "default"> = {
+  "same-form": "accent",
+  "same-author": "secondary",
+  "same-period": "secondary",
+  "similar-content": "default",
+  "similar-imagery": "default",
+};
 
-export default function SourceCard({ source, onViewDetail, showScores, compact }: SourceCardProps) {
+export default function SourceCard({
+  source,
+  onViewDetail,
+  showScores,
+  compact,
+}: SourceCardProps) {
   return (
     <article
       className="bg-white border border-[#e4e1da] rounded-lg p-4 hover:border-[#b8b5ad] transition-colors"
@@ -30,10 +35,16 @@ export default function SourceCard({ source, onViewDetail, showScores, compact }
           {source.rank}
         </span>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-[#252932] leading-tight truncate">{source.title}</h3>
+          <h3 className="text-sm font-semibold text-[#252932] leading-tight truncate">
+            {source.title}
+          </h3>
           <p className="text-xs text-[#7d8490] mt-0.5">
-            {source.author !== 'Chưa rõ tác giả' ? source.author : <em>Chưa rõ tác giả</em>}
-            {source.period && source.period !== 'Chưa xác định thời kỳ' && (
+            {source.author !== "Chưa rõ tác giả" ? (
+              source.author
+            ) : (
+              <em>Chưa rõ tác giả</em>
+            )}
+            {source.period && source.period !== "Chưa xác định thời kỳ" && (
               <> · {source.period}</>
             )}
           </p>
@@ -48,7 +59,7 @@ export default function SourceCard({ source, onViewDetail, showScores, compact }
       <div className="flex items-center gap-2 mb-3">
         <Badge variant="outline">{source.poetryForm}</Badge>
         {source.matchTags.map((tag) => (
-          <Badge key={tag.key} variant={matchTagVariants[tag.key] || 'default'}>
+          <Badge key={tag.key} variant={matchTagVariants[tag.key] || "default"}>
             {tag.label}
           </Badge>
         ))}
@@ -64,15 +75,21 @@ export default function SourceCard({ source, onViewDetail, showScores, compact }
         <div className="mb-3 grid grid-cols-3 gap-2 text-xs font-mono">
           <div className="bg-[#f4f2ed] rounded p-1.5 text-center">
             <div className="text-[#7d8490]">Dense</div>
-            <div className="text-[#3f4a6b] font-medium">{source.denseScore?.toFixed(3)}</div>
+            <div className="text-[#3f4a6b] font-medium">
+              {source.denseScore?.toFixed(3)}
+            </div>
           </div>
           <div className="bg-[#f4f2ed] rounded p-1.5 text-center">
             <div className="text-[#7d8490]">BM25</div>
-            <div className="text-[#3f4a6b] font-medium">{source.bm25Score?.toFixed(3)}</div>
+            <div className="text-[#3f4a6b] font-medium">
+              {source.bm25Score?.toFixed(3)}
+            </div>
           </div>
           <div className="bg-[#f4f2ed] rounded p-1.5 text-center">
             <div className="text-[#7d8490]">Hybrid</div>
-            <div className="text-[#3f4a6b] font-medium">{source.hybridScore?.toFixed(3)}</div>
+            <div className="text-[#3f4a6b] font-medium">
+              {source.hybridScore?.toFixed(3)}
+            </div>
           </div>
         </div>
       )}
@@ -82,9 +99,9 @@ export default function SourceCard({ source, onViewDetail, showScores, compact }
           onClick={() => onViewDetail(source)}
           className="text-xs font-medium text-[#3f4a6b] hover:text-[#272e44] hover:underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] rounded"
         >
-          Xem chi tiết →
+          <i className="fas fa-info-circle mr-1"></i> Xem chi tiết
         </button>
       )}
     </article>
-  )
+  );
 }
