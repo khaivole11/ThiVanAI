@@ -1,0 +1,118 @@
+{
+  "catalogVersion": "domain_catalog_v1",
+  "promptVersion": "poem_prompt_v1",
+  "fallbacks": {
+    "untitled": "Không tên",
+    "anonymous": "Vô danh",
+    "unspecifiedStyle": "Không yêu cầu",
+    "noSources": "Không tìm thấy bài thơ tham khảo phù hợp."
+  },
+  "context": {
+    "separator": "\n\n====================\n\n",
+    "sourceTemplate": "Bài tham khảo {rank}\nTên bài: {title}\nTác giả: {author}\nThể thơ chung: {genre}\nThời kỳ: {period}\nURL: {url}\n\n{content}"
+  },
+  "generationTitleTemplate": "Bài thơ {poetry_form} - {opening_excerpt}",
+  "periods": [
+    "Hiện đại",
+    "Cận đại",
+    "(Hậu Lê, Mạc, Trịnh-Nguyễn)",
+    "Nguyễn",
+    "Tây Sơn",
+    "Trần"
+  ],
+  "periodAliases": {
+    "(Hậu Lê, Mạc, Trịnh-Nguyễn)": ["Hậu Lê, Mạc, Trịnh-Nguyễn"]
+  },
+  "corpusSchema": {
+    "version": "poem_corpus_v1",
+    "requiredColumns": [
+      "Id",
+      "content",
+      "title",
+      "url",
+      "genre",
+      "period",
+      "specific_genre",
+      "author"
+    ]
+  },
+  "poetryForms": {
+    "Lục bát": {
+      "openingSyllables": 6,
+      "linePattern": [6, 8],
+      "requiredLineCount": null,
+      "stanzaMultiple": 2,
+      "promptRule": "Thể lục bát gồm các cặp câu 6 tiếng và 8 tiếng. Tiếng thứ 6 của câu lục hiệp vần với tiếng thứ 6 của câu bát; tiếng thứ 8 của câu bát hiệp vần với tiếng thứ 6 của câu lục tiếp theo. Câu 6 thường theo bằng - trắc - bằng ở tiếng 2, 4, 6; câu 8 thường theo bằng - trắc - bằng - bằng ở tiếng 2, 4, 6, 8."
+    },
+    "Thơ bảy chữ": {
+      "openingSyllables": 7,
+      "linePattern": [7],
+      "requiredLineCount": null,
+      "stanzaMultiple": null,
+      "promptRule": "Mỗi câu có đúng 7 tiếng. Số câu và số khổ không cố định. Có thể gieo vần chân theo vần liền, vần cách hoặc vần ôm, nhưng nên nhất quán trong từng khổ. Nhịp thường là 4/3, 3/4, 2/2/3 hoặc 2/3/2."
+    },
+    "Thất ngôn bát cú": {
+      "openingSyllables": 7,
+      "linePattern": [7],
+      "requiredLineCount": 8,
+      "stanzaMultiple": null,
+      "promptRule": "Bài thơ gồm đúng 8 câu, mỗi câu 7 tiếng. Bố cục gồm đề, thực, luận, kết. Vần thường gieo cuối các câu 1, 2, 4, 6 và 8. Nhịp thường là 4/3 hoặc 2/2/3."
+    },
+    "Thất ngôn bát cú Đường luật": {
+      "openingSyllables": 7,
+      "linePattern": [7],
+      "requiredLineCount": 8,
+      "stanzaMultiple": null,
+      "promptRule": "Bài thơ gồm đúng 8 câu, mỗi câu 7 tiếng. Dùng một vần bằng, gieo ở cuối các câu 1, 2, 4, 6 và 8. Câu 3 đối câu 4, câu 5 đối câu 6. Cần chú ý luật bằng trắc ở tiếng 2, 4, 6 và niêm giữa các cặp câu 1-8, 2-3, 4-5, 6-7."
+    },
+    "Thất ngôn tứ tuyệt": {
+      "openingSyllables": 7,
+      "linePattern": [7],
+      "requiredLineCount": 4,
+      "stanzaMultiple": null,
+      "promptRule": "Bài thơ gồm đúng 4 câu, mỗi câu 7 tiếng. Bố cục thường là khai, thừa, chuyển, hợp. Vần thường gieo cuối các câu 1, 2 và 4; câu 3 thường không gieo vần. Toàn bài nên dùng một vần thống nhất."
+    },
+    "Thơ tám chữ": {
+      "openingSyllables": 8,
+      "linePattern": [8],
+      "requiredLineCount": null,
+      "stanzaMultiple": null,
+      "promptRule": "Mỗi câu có đúng 8 tiếng. Số câu và số khổ không cố định. Có thể gieo vần chân theo vần liền, vần cách hoặc vần ôm. Nhịp thường là 4/4, 3/5, 5/3, 2/3/3 hoặc 3/2/3."
+    },
+    "Thơ tự do": {
+      "openingSyllables": null,
+      "linePattern": [],
+      "requiredLineCount": null,
+      "stanzaMultiple": null,
+      "promptRule": "Không quy định cố định số tiếng mỗi câu, số câu mỗi khổ, số khổ, cách gieo vần hoặc luật bằng trắc. Việc xuống dòng, ngắt câu và chia khổ được thực hiện linh hoạt."
+    },
+    "Thơ năm chữ": {
+      "openingSyllables": 5,
+      "linePattern": [5],
+      "requiredLineCount": null,
+      "stanzaMultiple": null,
+      "promptRule": "Mỗi câu có đúng 5 tiếng. Số câu và số khổ không cố định. Có thể gieo vần chân theo vần liền hoặc vần cách. Nhịp thường là 2/3 hoặc 3/2."
+    },
+    "Thơ bốn chữ": {
+      "openingSyllables": 4,
+      "linePattern": [4],
+      "requiredLineCount": null,
+      "stanzaMultiple": null,
+      "promptRule": "Mỗi câu có đúng 4 tiếng. Số câu và số khổ không cố định. Có thể gieo vần chân hoặc vần lưng theo vần liền hoặc vần cách. Nhịp phổ biến là 2/2."
+    },
+    "Thơ sáu chữ": {
+      "openingSyllables": 6,
+      "linePattern": [6],
+      "requiredLineCount": null,
+      "stanzaMultiple": null,
+      "promptRule": "Mỗi câu có đúng 6 tiếng. Số câu và số khổ không cố định. Có thể gieo vần chân hoặc vần lưng. Nhịp thường là 3/3, 2/2/2, 2/4 hoặc 4/2. Không xen kẽ câu 8 tiếng như lục bát."
+    },
+    "Song thất lục bát": {
+      "openingSyllables": 7,
+      "linePattern": [7, 7, 6, 8],
+      "requiredLineCount": null,
+      "stanzaMultiple": 4,
+      "promptRule": "Mỗi khổ gồm bốn câu theo thứ tự 7 tiếng, 7 tiếng, 6 tiếng, 8 tiếng. Câu thất thứ nhất vần với câu thất thứ hai; câu thất thứ hai vần với câu lục; câu lục vần với câu bát. Hai câu thất thường ngắt nhịp 3/4 hoặc 4/3."
+    }
+  }
+}

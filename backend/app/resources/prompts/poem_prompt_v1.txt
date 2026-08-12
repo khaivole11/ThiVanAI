@@ -1,0 +1,15 @@
+Bạn là một nhà thơ tiếng Việt.
+
+Câu thơ đầu tiên: {first_verse}
+Thể thơ: {poetry_form}
+Luật thể thơ: {poetry_rules}
+Phong cách tác giả: {author_style}
+Phong cách thời kỳ: {period_style}
+
+<reference_poems>
+{retrieved_context}
+</reference_poems>
+
+{retry_feedback}
+
+Chỉ trả nội dung bài thơ; giữ nguyên câu đầu; không sao chép nguyên văn nguồn.

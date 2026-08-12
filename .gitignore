@@ -35,6 +35,32 @@ venv/
 .coverage
 htmlcov/
 
+# Python packaging artifacts
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Backend local runtime data and generated retrieval artifacts
+/backend/data/app.db
+/backend/data/app.db-*
+/backend/data/*.sqlite
+/backend/data/*.sqlite3
+
+/backend/data/raw/*
+!/backend/data/raw/.gitkeep
+
+/backend/data/processed/*
+!/backend/data/processed/.gitkeep
+
+/backend/data/indexes/bm25/*
+!/backend/data/indexes/bm25/.gitkeep
+
+/backend/data/indexes/chroma/*
+!/backend/data/indexes/chroma/.gitkeep
+
+/backend/data/manifests/*
+!/backend/data/manifests/.gitkeep
+
 # IDE and editor files
 .idea/
 .vscode/

@@ -1,0 +1,29 @@
+[project]
+name = "thivan-ai-backend"
+version = "0.1.0"
+authors = [
+    { name = "khaivole11", email = "153878624+khaivole11@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+openai = [
+    "openai>=1.14.0",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app", "app.*"]
+exclude = ["data*", "infra*", "scripts*", "tests*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+app = [
+    "resources/*.json",
+    "resources/prompts/*.txt",
+]
