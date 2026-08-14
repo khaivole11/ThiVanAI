@@ -41,6 +41,8 @@ htmlcov/
 pip-wheel-metadata/
 
 # Backend local runtime data and generated retrieval artifacts
+/data/
+
 /backend/data/app.db
 /backend/data/app.db-*
 /backend/data/*.sqlite
