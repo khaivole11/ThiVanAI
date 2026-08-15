@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-
+import type { ReactNode } from "react";
 type ToastType = "success" | "error" | "warning" | "info";
 
 interface Toast {
@@ -15,11 +15,13 @@ export function showToast(message: string, type: ToastType = "success") {
   toastHandlers.forEach((handler) => handler(toast));
 }
 
-const icons: Record<ToastType, string> = {
-  success: '<i class="fa-solid fa-check"></i>',
-  error: '<i class="fa-solid fa-xmark"></i>',
-  warning: '<i class="fa-solid fa-triangle-exclamation"></i>',
-  info: '<i class="fa-solid fa-circle-info"></i>',
+const icons: Record<ToastType, ReactNode> = {
+  success: <i className="fa-solid fa-check" aria-hidden="true" />,
+  error: <i className="fa-solid fa-xmark" aria-hidden="true" />,
+  warning: (
+    <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
+  ),
+  info: <i className="fa-solid fa-circle-info" aria-hidden="true" />,
 };
 
 const styles: Record<ToastType, string> = {
@@ -58,7 +60,9 @@ export function ToastContainer() {
           role="status"
           className={`flex items-center gap-3 px-4 py-3 rounded-lg border shadow-md text-sm font-medium animate-fade-in max-w-sm ${styles[toast.type]}`}
         >
-          <span className="font-bold">{icons[toast.type]}</span>
+          <span className="font-bold flex-shrink-0" aria-hidden="true">
+            {icons[toast.type]}
+          </span>
           <span>{toast.message}</span>
         </div>
       ))}

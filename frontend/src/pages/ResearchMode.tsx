@@ -1,724 +1,689 @@
-import { useState } from "react";
-import Button from "../components/Button";
+import { useEffect, useRef, useState } from "react";
+import { createGeneration } from "../api/generations";
+import { isAbortError, toUserMessage } from "../api/errorMessages";
+import { mapGeneratedPoem, mapSourcePoem } from "../api/mappers";
+import { searchPoems } from "../api/retrieval";
+import type { GeneratePoemRequestDto } from "../api/contracts";
 import Badge from "../components/Badge";
+import Button from "../components/Button";
 import SourceCard from "../components/SourceCard";
-import SourceDetailDrawer from "../components/SourceDetailDrawer";
-import { showToast } from "../components/Toast";
-import { simulateGeneration } from "../store";
-import {
-  POETRY_FORM_LABELS,
-  PERIOD_LABELS,
-  EXAMPLE_AUTHORS,
-  type PoetryForm,
-  type LiteraryPeriod,
-  type SourcePoem,
-} from "../types";
+import { useMetadata } from "../hooks/useMetadata";
+import type { GeneratedPoem, SourcePoem } from "../types";
 
-type ActiveTab = "query" | "retrieval" | "generation" | "metrics";
+type ActiveOperation = "retrieval" | "generation" | null;
 
-const RETRIEVAL_METHODS = ["BM25", "Dense (Embedding)", "Hybrid", "HyDE"];
-const EMBEDDING_MODELS = [
-  "multilingual-e5-large-instruct",
-  "paraphrase-multilingual-MiniLM-L12-v2",
-  "PhoBERT-based",
-];
-const GENERATION_MODELS = ["Gemini 2.5 Flash", "BARTpho", "mT5", "SP-GPT2"];
-const POETRY_FORMS = Object.entries(POETRY_FORM_LABELS) as [
-  PoetryForm,
-  string,
-][];
+interface RagConfig {
+  topK: number;
+  embeddingK: number;
+  bm25K: number;
+  alpha: number;
+}
+
+function formatMilliseconds(value: number | null): string {
+  return value === null ? "—" : value.toFixed(1) + " ms";
+}
 
 export default function ResearchMode() {
-  const [tab, setTab] = useState<ActiveTab>("query");
+  const {
+    poetryForms,
+    periods,
+    loading: metadataLoading,
+    error: metadataError,
+    reload: reloadMetadata,
+  } = useMetadata();
 
-  // Query config
   const [openingVerse, setOpeningVerse] = useState("");
-  const [poetryForm, setPoetryForm] = useState<PoetryForm | "">("");
+  const [poetryForm, setPoetryForm] = useState("");
   const [authorStyle, setAuthorStyle] = useState("");
-  const [period, setPeriod] = useState<LiteraryPeriod>("");
+  const [period, setPeriod] = useState("");
 
-  // Retrieval config
-  const [retrievalMethod, setRetrievalMethod] = useState("Hybrid");
-  const [embeddingModel, setEmbeddingModel] = useState(EMBEDDING_MODELS[0]);
   const [topK, setTopK] = useState(5);
-  const [reranking, setReranking] = useState(false);
-  const [hydeEnabled, setHydeEnabled] = useState(false);
+  const [embeddingK, setEmbeddingK] = useState(20);
+  const [bm25K, setBm25K] = useState(20);
+  const [alpha, setAlpha] = useState(0.65);
 
-  // Generation config
-  const [genModel, setGenModel] = useState(GENERATION_MODELS[0]);
-  const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(512);
+  const [activeOperation, setActiveOperation] =
+    useState<ActiveOperation>(null);
+  const [runError, setRunError] = useState("");
 
-  // Results
-  const [running, setRunning] = useState(false);
-  const [results, setResults] = useState<SourcePoem[] | null>(null);
-  const [generatedLines, setGeneratedLines] = useState<string[]>([]);
-  const [selectedSource, setSelectedSource] = useState<SourcePoem | null>(null);
-  const [elapsed, setElapsed] = useState<number | null>(null);
+  const [retrievalHasRun, setRetrievalHasRun] = useState(false);
+  const [retrievalSources, setRetrievalSources] = useState<SourcePoem[]>([]);
+  const [retrievalElapsed, setRetrievalElapsed] = useState<number | null>(null);
+  const [retrievalConfig, setRetrievalConfig] = useState<RagConfig | null>(
+    null,
+  );
 
-  async function handleRun() {
+  const [generationResult, setGenerationResult] =
+    useState<GeneratedPoem | null>(null);
+  const [generationElapsed, setGenerationElapsed] =
+    useState<number | null>(null);
+  const [generationConfig, setGenerationConfig] = useState<RagConfig | null>(
+    null,
+  );
+
+  const requestControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      requestControllerRef.current?.abort();
+    };
+  }, []);
+
+  function getCurrentConfig(): RagConfig {
+    return {
+      topK,
+      embeddingK,
+      bm25K,
+      alpha,
+    };
+  }
+
+  function createController(operation: Exclude<ActiveOperation, null>) {
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    setActiveOperation(operation);
+    setRunError("");
+    return controller;
+  }
+
+  function finishOperation(controller: AbortController) {
+    if (requestControllerRef.current === controller) {
+      requestControllerRef.current = null;
+      setActiveOperation(null);
+    }
+  }
+
+  function handleCancel() {
+    requestControllerRef.current?.abort();
+    requestControllerRef.current = null;
+    setActiveOperation(null);
+  }
+
+  async function handleRetrieval() {
     if (!openingVerse.trim()) {
-      showToast("Vui lòng nhập câu thơ mở đầu.", "warning");
+      setRunError("Vui lòng nhập câu thơ mở đầu trước khi chạy retrieval.");
       return;
     }
-    setRunning(true);
-    setResults(null);
-    setGeneratedLines([]);
-    const start = Date.now();
+
+    const controller = createController("retrieval");
+    const config = getCurrentConfig();
+    const start = performance.now();
+
+    setRetrievalHasRun(false);
+    setRetrievalSources([]);
+    setRetrievalElapsed(null);
+
+    const requestContext: GeneratePoemRequestDto = {
+      firstVerse: openingVerse.trim(),
+      poetryForm,
+      ...(authorStyle.trim()
+        ? { authorStyle: authorStyle.trim() }
+        : {}),
+      ...(period ? { periodStyle: period } : {}),
+      ...config,
+    };
 
     try {
-      const poem = await simulateGeneration(
+      const response = await searchPoems(
         {
-          openingVerse: openingVerse.trim(),
-          poetryForm: (poetryForm as PoetryForm) || "tu-do",
-          authorStyle,
-          period,
-          topK,
-          retrievalMethod,
-          generationModel: genModel,
-          temperature,
+          firstVerse: requestContext.firstVerse,
+          ...(poetryForm ? { genre: poetryForm } : {}),
+          ...(authorStyle.trim()
+            ? { author: authorStyle.trim() }
+            : {}),
+          ...(period ? { period } : {}),
+          ...config,
         },
-        () => {},
+        controller.signal,
       );
-      setResults(poem.sources.slice(0, topK));
-      setGeneratedLines(poem.lines);
-      setElapsed(Date.now() - start);
-    } catch {
-      showToast("Không thể thực hiện thử nghiệm.", "error");
+
+      setRetrievalSources(
+        response.map((source) => mapSourcePoem(source, requestContext)),
+      );
+      setRetrievalConfig(config);
+      setRetrievalElapsed(performance.now() - start);
+      setRetrievalHasRun(true);
+    } catch (error: unknown) {
+      if (!isAbortError(error)) {
+        setRunError(toUserMessage(error));
+      }
     } finally {
-      setRunning(false);
+      finishOperation(controller);
     }
   }
 
-  function handleExport() {
-    if (!results) return;
-    const data = {
-      config: { retrievalMethod, embeddingModel, topK, genModel, temperature },
-      query: { openingVerse, poetryForm, authorStyle, period },
-      retrievedSources: results,
-      generatedPoem: generatedLines,
-      elapsedMs: elapsed,
+  async function handleGeneration() {
+    if (!openingVerse.trim() || !poetryForm) {
+      setRunError(
+        "Vui lòng nhập câu thơ mở đầu và chọn thể thơ trước khi sinh thơ.",
+      );
+      return;
+    }
+
+    const controller = createController("generation");
+    const config = getCurrentConfig();
+    const start = performance.now();
+
+    setGenerationResult(null);
+    setGenerationElapsed(null);
+
+    const body: GeneratePoemRequestDto = {
+      firstVerse: openingVerse.trim(),
+      poetryForm,
+      ...(authorStyle.trim()
+        ? { authorStyle: authorStyle.trim() }
+        : {}),
+      ...(period ? { periodStyle: period } : {}),
+      ...config,
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "experiment.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("Đã xuất kết quả thử nghiệm.", "success");
+
+    try {
+      const response = await createGeneration(body, controller.signal);
+      setGenerationResult(mapGeneratedPoem(response, body));
+      setGenerationConfig(config);
+      setGenerationElapsed(performance.now() - start);
+    } catch (error: unknown) {
+      if (!isAbortError(error)) {
+        setRunError(toUserMessage(error));
+      }
+    } finally {
+      finishOperation(controller);
+    }
   }
 
-  const sourceIndex =
-    results?.findIndex((s) => s.id === selectedSource?.id) ?? -1;
+  const metadataReady =
+    !metadataLoading &&
+    !metadataError &&
+    poetryForms.length > 0;
+  const controlsDisabled = activeOperation !== null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 py-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold text-[#252932]">
-              Chế độ nghiên cứu
-            </h1>
-            <Badge variant="info">Beta</Badge>
-          </div>
-          <p className="text-[#5f6673] text-sm">
-            Cấu hình và so sánh các phương pháp RAG cho sinh thơ tiếng Việt.
-          </p>
+    <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
+      <header className="mb-7">
+        <div className="flex flex-wrap items-center gap-3 mb-2">
+          <h1 className="text-3xl font-bold text-[#252932]">
+            Chế độ nghiên cứu RAG
+          </h1>
+          <Badge variant="info">Dành cho thử nghiệm</Badge>
         </div>
-        {results && (
-          <Button variant="secondary" size="sm" onClick={handleExport}>
-            Xuất kết quả JSON
-          </Button>
-        )}
-      </div>
+        <p className="text-[#5f6673] max-w-3xl">
+          Chạy retrieval độc lập hoặc chạy toàn bộ pipeline sinh thơ. Kết quả
+          bên dưới chỉ hiển thị score, timing và metadata thật từ backend.
+        </p>
+      </header>
 
-      {/* Warning banner */}
-      <div className="bg-[#fff5e5] border border-[#ebcb97] rounded-lg px-4 py-3 text-sm text-[#7b4c13] mb-6 flex gap-2">
-        <span className="flex-shrink-0 font-bold">
-          <i className="fa-solid fa-triangle-exclamation"></i>
-        </span>
-        Các thiết lập trong trang này dành cho thử nghiệm kỹ thuật và có thể làm
-        thay đổi đáng kể kết quả truy xuất hoặc sinh thơ.
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Config sidebar */}
-        <aside
-          className="lg:col-span-1 space-y-5"
-          aria-label="Cấu hình thử nghiệm"
+      {metadataError && (
+        <div
+          role="alert"
+          className="mb-6 rounded-lg border border-[#edb8b8] bg-[#fceeee] p-4"
         >
-          {/* Query */}
-          <section className="bg-white border border-[#e4e1da] rounded-xl p-5">
-            <h2 className="font-semibold text-[#252932] mb-4 text-sm uppercase tracking-wide">
-              Truy vấn
-            </h2>
-            <div className="space-y-3">
+          <p className="text-sm text-[#8e3030] mb-3">
+            Không thể tải metadata nghiên cứu từ backend.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={reloadMetadata}
+          >
+            Thử lại
+          </Button>
+        </div>
+      )}
+
+      {runError && (
+        <div
+          role="alert"
+          className="mb-6 rounded-lg border border-[#edb8b8] bg-[#fceeee] p-4 text-sm text-[#8e3030]"
+        >
+          {runError}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section className="rounded-xl border border-[#e4e1da] bg-white p-5">
+          <h2 className="font-semibold text-lg text-[#252932] mb-4">
+            Truy vấn và metadata
+          </h2>
+
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="research-opening-verse"
+                className="block text-sm font-medium text-[#252932] mb-1.5"
+              >
+                Câu thơ mở đầu *
+              </label>
+              <input
+                id="research-opening-verse"
+                type="text"
+                value={openingVerse}
+                onChange={(event) => setOpeningVerse(event.target.value)}
+                disabled={controlsDisabled}
+                placeholder="Nhập câu thơ dùng làm truy vấn..."
+                className="w-full p-3 border border-[#d5d2ca] rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] disabled:bg-[#f4f2ed]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label
-                  htmlFor="r-verse"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Câu thơ mở đầu
-                </label>
-                <textarea
-                  id="r-verse"
-                  rows={2}
-                  value={openingVerse}
-                  onChange={(e) => setOpeningVerse(e.target.value)}
-                  placeholder="Nhập câu thơ..."
-                  className="w-full px-3 py-2 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] placeholder:text-[#a8adb5] resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] font-serif"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="r-form"
-                  className="block text-xs font-medium text-[#252932] mb-1"
+                  htmlFor="research-poetry-form"
+                  className="block text-sm font-medium text-[#252932] mb-1.5"
                 >
                   Thể thơ
                 </label>
                 <select
-                  id="r-form"
+                  id="research-poetry-form"
                   value={poetryForm}
-                  onChange={(e) => setPoetryForm(e.target.value as PoetryForm)}
-                  className="w-full px-3 py-2 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] cursor-pointer"
+                  onChange={(event) => setPoetryForm(event.target.value)}
+                  disabled={!metadataReady || controlsDisabled}
+                  className="w-full p-3 border border-[#d5d2ca] rounded-lg bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] disabled:bg-[#f4f2ed]"
                 >
-                  <option value="">Tất cả</option>
-                  {POETRY_FORMS.map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
+                  <option value="">
+                    {metadataLoading
+                      ? "Đang tải thể thơ..."
+                      : "Không lọc thể thơ"}
+                  </option>
+                  {poetryForms.map((form) => (
+                    <option key={form.key} value={form.value}>
+                      {form.value}
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-[#7d8490] mt-1">
+                  Retrieval có thể để trống; generation bắt buộc chọn.
+                </p>
               </div>
+
               <div>
                 <label
-                  htmlFor="r-author"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Tác giả
-                </label>
-                <input
-                  id="r-author"
-                  type="text"
-                  value={authorStyle}
-                  onChange={(e) => setAuthorStyle(e.target.value)}
-                  list="author-list"
-                  placeholder="Tùy chọn"
-                  className="w-full px-3 py-2 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789]"
-                />
-                <datalist id="author-list">
-                  {EXAMPLE_AUTHORS.map((a) => (
-                    <option key={a} value={a} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label
-                  htmlFor="r-period"
-                  className="block text-xs font-medium text-[#252932] mb-1"
+                  htmlFor="research-period"
+                  className="block text-sm font-medium text-[#252932] mb-1.5"
                 >
                   Thời kỳ
                 </label>
                 <select
-                  id="r-period"
+                  id="research-period"
                   value={period}
-                  onChange={(e) => setPeriod(e.target.value as LiteraryPeriod)}
-                  className="w-full px-3 py-2 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] cursor-pointer"
+                  onChange={(event) => setPeriod(event.target.value)}
+                  disabled={!metadataReady || controlsDisabled}
+                  className="w-full p-3 border border-[#d5d2ca] rounded-lg bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] disabled:bg-[#f4f2ed]"
                 >
-                  {Object.entries(PERIOD_LABELS).map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
+                  <option value="">Không lọc thời kỳ</option>
+                  {periods.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
-          </section>
 
-          {/* Retrieval config */}
-          <section className="bg-white border border-[#e4e1da] rounded-xl p-5">
-            <h2 className="font-semibold text-[#252932] mb-4 text-sm uppercase tracking-wide">
-              Truy xuất
-            </h2>
-            <div className="space-y-3">
-              <div>
-                <label
-                  htmlFor="r-method"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Phương pháp
-                </label>
-                <select
-                  id="r-method"
-                  value={retrievalMethod}
-                  onChange={(e) => setRetrievalMethod(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] cursor-pointer"
-                >
-                  {RETRIEVAL_METHODS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="r-embedding"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Embedding model
-                </label>
-                <select
-                  id="r-embedding"
-                  value={embeddingModel}
-                  onChange={(e) => setEmbeddingModel(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] cursor-pointer"
-                >
-                  {EMBEDDING_MODELS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="r-topk"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Top-K: {topK}
-                </label>
-                <input
-                  id="r-topk"
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={topK}
-                  onChange={(e) => setTopK(Number(e.target.value))}
-                  className="w-full accent-[#3f4a6b]"
-                />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={reranking}
-                  onChange={(e) => setReranking(e.target.checked)}
-                  className="accent-[#3f4a6b]"
-                />
-                <span className="text-xs text-[#252932]">Reranking</span>
+            <div>
+              <label
+                htmlFor="research-author"
+                className="block text-sm font-medium text-[#252932] mb-1.5"
+              >
+                Tác giả
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hydeEnabled}
-                  onChange={(e) => setHydeEnabled(e.target.checked)}
-                  className="accent-[#3f4a6b]"
-                />
-                <span className="text-xs text-[#252932]">HyDE</span>
+              <input
+                id="research-author"
+                type="text"
+                value={authorStyle}
+                onChange={(event) => setAuthorStyle(event.target.value)}
+                disabled={controlsDisabled}
+                placeholder="Không bắt buộc"
+                className="w-full p-3 border border-[#d5d2ca] rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] disabled:bg-[#f4f2ed]"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-[#e4e1da] bg-white p-5">
+          <h2 className="font-semibold text-lg text-[#252932] mb-1">
+            Tham số RAG backend
+          </h2>
+          <p className="text-xs text-[#7d8490] mb-4">
+            Các giới hạn hiện khớp config backend: Top K tối đa 20, candidate K
+            tối đa 100.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label
+                htmlFor="research-top-k"
+                className="block text-sm font-medium text-[#252932] mb-1.5"
+              >
+                Top K sources
               </label>
+              <input
+                id="research-top-k"
+                type="number"
+                min={1}
+                max={20}
+                step={1}
+                value={topK}
+                onChange={(event) => {
+                  const value = event.currentTarget.valueAsNumber;
+                  if (Number.isInteger(value) && value >= 1 && value <= 20) {
+                    setTopK(value);
+                  }
+                }}
+                disabled={controlsDisabled}
+                className="w-full p-3 border border-[#d5d2ca] rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] disabled:bg-[#f4f2ed]"
+              />
             </div>
-          </section>
 
-          {/* Generation config */}
-          <section className="bg-white border border-[#e4e1da] rounded-xl p-5">
-            <h2 className="font-semibold text-[#252932] mb-4 text-sm uppercase tracking-wide">
-              Sinh thơ
-            </h2>
-            <div className="space-y-3">
-              <div>
-                <label
-                  htmlFor="r-genmodel"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Mô hình sinh
-                </label>
-                <select
-                  id="r-genmodel"
-                  value={genModel}
-                  onChange={(e) => setGenModel(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] cursor-pointer"
-                >
-                  {GENERATION_MODELS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="r-temp"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Nhiệt độ: {temperature.toFixed(1)}
-                </label>
-                <input
-                  id="r-temp"
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  value={temperature}
-                  onChange={(e) => setTemperature(Number(e.target.value))}
-                  className="w-full accent-[#3f4a6b]"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="r-tokens"
-                  className="block text-xs font-medium text-[#252932] mb-1"
-                >
-                  Max tokens: {maxTokens}
-                </label>
-                <input
-                  id="r-tokens"
-                  type="range"
-                  min={128}
-                  max={1024}
-                  step={64}
-                  value={maxTokens}
-                  onChange={(e) => setMaxTokens(Number(e.target.value))}
-                  className="w-full accent-[#3f4a6b]"
-                />
-              </div>
+            <div>
+              <label
+                htmlFor="research-embedding-k"
+                className="block text-sm font-medium text-[#252932] mb-1.5"
+              >
+                Embedding K
+              </label>
+              <input
+                id="research-embedding-k"
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                value={embeddingK}
+                onChange={(event) => {
+                  const value = event.currentTarget.valueAsNumber;
+                  if (Number.isInteger(value) && value >= 1 && value <= 100) {
+                    setEmbeddingK(value);
+                  }
+                }}
+                disabled={controlsDisabled}
+                className="w-full p-3 border border-[#d5d2ca] rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] disabled:bg-[#f4f2ed]"
+              />
             </div>
-          </section>
 
-          <Button
-            onClick={handleRun}
-            loading={running}
-            size="lg"
-            className="w-full"
-          >
-            {running ? "Đang chạy..." : "Chạy thử nghiệm"}
-          </Button>
-        </aside>
-
-        {/* Results area */}
-        <div className="lg:col-span-3 space-y-5">
-          {/* Tabs */}
-          <div
-            className="flex border-b border-[#e4e1da]"
-            role="tablist"
-            aria-label="Kết quả thử nghiệm"
-          >
-            {(
-              ["query", "retrieval", "generation", "metrics"] as ActiveTab[]
-            ).map((t) => {
-              const labels: Record<ActiveTab, string> = {
-                query: "Truy vấn",
-                retrieval: "Truy xuất",
-                generation: "Sinh thơ",
-                metrics: "Chỉ số",
-              };
-              return (
-                <button
-                  key={t}
-                  role="tab"
-                  aria-selected={tab === t}
-                  onClick={() => setTab(t)}
-                  className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#596789] ${
-                    tab === t
-                      ? "border-[#3f4a6b] text-[#3f4a6b]"
-                      : "border-transparent text-[#5f6673] hover:text-[#252932]"
-                  }`}
-                >
-                  {labels[t]}
-                </button>
-              );
-            })}
+            <div>
+              <label
+                htmlFor="research-bm25-k"
+                className="block text-sm font-medium text-[#252932] mb-1.5"
+              >
+                BM25 K
+              </label>
+              <input
+                id="research-bm25-k"
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                value={bm25K}
+                onChange={(event) => {
+                  const value = event.currentTarget.valueAsNumber;
+                  if (Number.isInteger(value) && value >= 1 && value <= 100) {
+                    setBm25K(value);
+                  }
+                }}
+                disabled={controlsDisabled}
+                className="w-full p-3 border border-[#d5d2ca] rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] disabled:bg-[#f4f2ed]"
+              />
+            </div>
           </div>
 
-          {/* Tab content */}
-          {tab === "query" && (
-            <div
-              className="bg-white border border-[#e4e1da] rounded-xl p-6"
-              role="tabpanel"
-              aria-label="Truy vấn"
-            >
-              {!results ? (
-                <div className="text-center py-16 text-[#7d8490]">
-                  <p className="text-lg font-medium">
-                    Thiết lập cấu hình và chạy thử nghiệm đầu tiên.
-                  </p>
-                  <p className="text-sm mt-2">
-                    Kết quả sẽ xuất hiện tại đây sau khi chạy.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <h2 className="font-semibold text-[#252932]">
-                    Tóm tắt thử nghiệm
-                  </h2>
-                  <dl className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="bg-[#f4f2ed] rounded-lg p-3">
-                      <dt className="text-xs text-[#7d8490] mb-1">
-                        Phương pháp
-                      </dt>
-                      <dd className="font-medium text-[#252932]">
-                        {retrievalMethod}
-                      </dd>
-                    </div>
-                    <div className="bg-[#f4f2ed] rounded-lg p-3">
-                      <dt className="text-xs text-[#7d8490] mb-1">
-                        Mô hình sinh
-                      </dt>
-                      <dd className="font-medium text-[#252932]">{genModel}</dd>
-                    </div>
-                    <div className="bg-[#f4f2ed] rounded-lg p-3">
-                      <dt className="text-xs text-[#7d8490] mb-1">Top-K</dt>
-                      <dd className="font-medium text-[#252932]">{topK}</dd>
-                    </div>
-                    <div className="bg-[#f4f2ed] rounded-lg p-3">
-                      <dt className="text-xs text-[#7d8490] mb-1">
-                        Thời gian chạy
-                      </dt>
-                      <dd className="font-mono font-medium text-[#252932]">
-                        {elapsed ? `${(elapsed / 1000).toFixed(2)}s` : "—"}
-                      </dd>
-                    </div>
-                  </dl>
-                  {openingVerse && (
-                    <div className="bg-[#fcf8f1] border border-[#e4e1da] rounded-lg p-4">
-                      <p className="text-xs text-[#7d8490] mb-1">
-                        Câu thơ đã dùng
-                      </p>
-                      <p className="font-serif text-[#292823] italic">
-                        {openingVerse}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-3 mb-1.5">
+              <label
+                htmlFor="research-alpha"
+                className="text-sm font-medium text-[#252932]"
+              >
+                Alpha — trọng số Dense
+              </label>
+              <output
+                htmlFor="research-alpha"
+                className="font-mono text-sm text-[#3f4a6b]"
+              >
+                {alpha.toFixed(2)}
+              </output>
             </div>
-          )}
-
-          {tab === "retrieval" && (
-            <div role="tabpanel" aria-label="Kết quả truy xuất">
-              {!results ? (
-                <div className="bg-white border border-[#e4e1da] rounded-xl p-8 text-center text-[#7d8490]">
-                  Chạy thử nghiệm để xem kết quả truy xuất.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm text-[#5f6673]">
-                    Tìm thấy <strong>{results.length}</strong> bài thơ với
-                    phương pháp <strong>{retrievalMethod}</strong>.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {results.map((source) => (
-                      <SourceCard
-                        key={source.id}
-                        source={source}
-                        onViewDetail={setSelectedSource}
-                        showScores
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+            <input
+              id="research-alpha"
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={alpha}
+              onChange={(event) => setAlpha(Number(event.target.value))}
+              disabled={controlsDisabled}
+              className="w-full accent-[#3f4a6b]"
+            />
+            <div className="flex justify-between text-xs text-[#7d8490]">
+              <span>0 — ưu tiên BM25</span>
+              <span>1 — ưu tiên Dense</span>
             </div>
-          )}
-
-          {tab === "generation" && (
-            <div role="tabpanel" aria-label="Bài thơ được tạo">
-              {generatedLines.length === 0 ? (
-                <div className="bg-white border border-[#e4e1da] rounded-xl p-8 text-center text-[#7d8490]">
-                  Chạy thử nghiệm để xem bài thơ được tạo.
-                </div>
-              ) : (
-                <div className="bg-[#fffcf7] border border-[#e4e1da] rounded-xl p-8">
-                  <div className="flex items-center justify-between mb-5">
-                    <Badge variant="secondary">
-                      {POETRY_FORM_LABELS[poetryForm as PoetryForm] ||
-                        "Thơ tự do"}
-                    </Badge>
-                    <span className="text-xs font-mono text-[#7d8490]">
-                      {genModel}
-                    </span>
-                  </div>
-                  <div className="max-w-lg">
-                    {generatedLines.map((line, i) => (
-                      <p
-                        key={i}
-                        className="text-[#292823] text-lg leading-[1.9]"
-                        style={{ fontFamily: "'Lora', serif" }}
-                      >
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                  <div className="mt-6 pt-4 border-t border-[#e4e1da]">
-                    <h3 className="text-xs font-bold text-[#7d8490] uppercase tracking-wide mb-3">
-                      Prompt (mô phỏng)
-                    </h3>
-                    <pre className="text-xs font-mono text-[#5f6673] bg-[#f4f2ed] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-                      {`[SYSTEM] Bạn là trợ lý sáng tác thơ tiếng Việt.
-[CONTEXT] ${
-                        results
-                          ?.slice(0, 2)
-                          .map((s) => s.excerpt)
-                          .join("\n---\n") ?? "(Không có)"
-                      }
-[USER] Hãy phát triển câu thơ sau thành bài ${POETRY_FORM_LABELS[poetryForm as PoetryForm] || "thơ tự do"}:
-"${openingVerse}"`}
-                    </pre>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {tab === "metrics" && (
-            <div role="tabpanel" aria-label="Chỉ số đánh giá">
-              {!results ? (
-                <div className="bg-white border border-[#e4e1da] rounded-xl p-8 text-center text-[#7d8490]">
-                  Chạy thử nghiệm để xem chỉ số đánh giá.
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {/* Retrieval metrics */}
-                  <section className="bg-white border border-[#e4e1da] rounded-xl p-5">
-                    <h2 className="font-semibold text-[#252932] mb-4">
-                      Chỉ số truy xuất
-                    </h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {[
-                        { label: "Recall@5", value: "0.72", note: "mô phỏng" },
-                        { label: "MRR", value: "0.68", note: "mô phỏng" },
-                        { label: "MAP", value: "0.61", note: "mô phỏng" },
-                        { label: "nDCG@5", value: "0.74", note: "mô phỏng" },
-                        {
-                          label: "Gold Coverage@5",
-                          value: "0.80",
-                          note: "mô phỏng",
-                        },
-                      ].map((m) => (
-                        <div
-                          key={m.label}
-                          className="bg-[#f4f2ed] rounded-lg p-3 text-center"
-                        >
-                          <div className="font-mono text-lg font-bold text-[#3f4a6b]">
-                            {m.value}
-                          </div>
-                          <div className="text-xs text-[#252932] font-medium">
-                            {m.label}
-                          </div>
-                          <div className="text-xs text-[#7d8490]">{m.note}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  {/* Generation metrics */}
-                  <section className="bg-white border border-[#e4e1da] rounded-xl p-5">
-                    <h2 className="font-semibold text-[#252932] mb-4">
-                      Chỉ số sinh thơ
-                    </h2>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
-                          <tr className="border-b border-[#e4e1da]">
-                            <th className="text-left py-2 pr-4 text-xs font-semibold text-[#7d8490] uppercase">
-                              Chỉ số
-                            </th>
-                            <th className="text-left py-2 pr-4 text-xs font-semibold text-[#7d8490] uppercase">
-                              Giá trị
-                            </th>
-                            <th className="text-left py-2 text-xs font-semibold text-[#7d8490] uppercase">
-                              Loại
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#e4e1da]">
-                          {[
-                            {
-                              name: "RA (Response Accuracy)",
-                              value: "N/A",
-                              type: "Tự động",
-                            },
-                            {
-                              name: "RC (Response Continuity)",
-                              value: "0.65",
-                              type: "Tự động",
-                            },
-                            {
-                              name: "PSES (Poetic Structure)",
-                              value: "0.71",
-                              type: "Tự động",
-                            },
-                            {
-                              name: "LR (Lexical Richness)",
-                              value: "0.58",
-                              type: "Tự động",
-                            },
-                            { name: "BLEU", value: "0.12", type: "Tự động" },
-                            {
-                              name: "RR (Response Relevance)",
-                              value: "Cần LLM",
-                              type: "LLM",
-                            },
-                            {
-                              name: "CMS (Context Match)",
-                              value: "Cần LLM",
-                              type: "LLM",
-                            },
-                          ].map((m) => (
-                            <tr key={m.name}>
-                              <td className="py-2 pr-4 text-[#252932] font-mono text-xs">
-                                {m.name}
-                              </td>
-                              <td className="py-2 pr-4 text-[#3f4a6b] font-medium">
-                                {m.value}
-                              </td>
-                              <td className="py-2">
-                                <Badge
-                                  variant={
-                                    m.type === "LLM" ? "info" : "outline"
-                                  }
-                                >
-                                  {m.type}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="mt-3 text-xs text-[#7d8490]">
-                      * Các chỉ số mô phỏng. Giá trị thực tế phụ thuộc vào
-                      backend.
-                    </p>
-                  </section>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          </div>
+        </section>
       </div>
 
-      {/* Source detail drawer */}
-      <SourceDetailDrawer
-        source={selectedSource}
-        onClose={() => setSelectedSource(null)}
-        onPrev={
-          results && sourceIndex > 0
-            ? () => setSelectedSource(results[sourceIndex - 1])
-            : undefined
-        }
-        onNext={
-          results && sourceIndex < results.length - 1
-            ? () => setSelectedSource(results[sourceIndex + 1])
-            : undefined
-        }
-        currentIndex={sourceIndex >= 0 ? sourceIndex : undefined}
-        total={results?.length}
-        showScores
-      />
+      <div className="flex flex-wrap gap-3 mt-6">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => void handleRetrieval()}
+          loading={activeOperation === "retrieval"}
+          disabled={!metadataReady || activeOperation !== null}
+        >
+          Chạy retrieval
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void handleGeneration()}
+          loading={activeOperation === "generation"}
+          disabled={!metadataReady || activeOperation !== null}
+        >
+          Sinh thơ
+        </Button>
+        {activeOperation && (
+          <Button type="button" variant="destructive" onClick={handleCancel}>
+            Hủy request
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-10 space-y-8">
+        {retrievalHasRun && retrievalConfig && (
+          <section aria-labelledby="retrieval-results-heading">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h2
+                  id="retrieval-results-heading"
+                  className="text-xl font-bold text-[#252932]"
+                >
+                  Kết quả retrieval-only
+                </h2>
+                <p className="text-sm text-[#5f6673] mt-1">
+                  {retrievalSources.length} nguồn ·{" "}
+                  {formatMilliseconds(retrievalElapsed)}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">
+                  topK {retrievalConfig.topK}
+                </Badge>
+                <Badge variant="outline">
+                  embeddingK {retrievalConfig.embeddingK}
+                </Badge>
+                <Badge variant="outline">
+                  bm25K {retrievalConfig.bm25K}
+                </Badge>
+                <Badge variant="outline">
+                  alpha {retrievalConfig.alpha.toFixed(2)}
+                </Badge>
+              </div>
+            </div>
+
+            {retrievalSources.length === 0 ? (
+              <div className="rounded-lg border border-[#e4e1da] bg-white p-6 text-[#5f6673]">
+                Backend không trả nguồn phù hợp cho truy vấn này.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {retrievalSources.map((source) => (
+                  <SourceCard
+                    key={source.id}
+                    source={source}
+                    showScores
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {generationResult && generationConfig && (
+          <section aria-labelledby="generation-results-heading">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <h2
+                  id="generation-results-heading"
+                  className="text-xl font-bold text-[#252932]"
+                >
+                  Kết quả generation
+                </h2>
+                <p className="text-sm text-[#5f6673] mt-1">
+                  Client elapsed: {formatMilliseconds(generationElapsed)}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge
+                  variant={
+                    generationResult.validationPassed ? "success" : "warning"
+                  }
+                >
+                  {generationResult.validationPassed
+                    ? "Validation đạt"
+                    : "Validation có cảnh báo"}
+                </Badge>
+                <Badge variant="info">
+                  {generationResult.provider} / {generationResult.model}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+              <article className="xl:col-span-2 rounded-xl border border-[#e4e1da] bg-[#fffcf7] p-6">
+                <h3 className="text-2xl font-semibold text-[#292823] mb-5">
+                  {generationResult.title}
+                </h3>
+                <div className="font-serif whitespace-pre-line text-lg leading-8 text-[#292823]">
+                  {generationResult.fullText}
+                </div>
+              </article>
+
+              <aside className="rounded-xl border border-[#e4e1da] bg-white p-5">
+                <h3 className="font-semibold text-[#252932] mb-3">
+                  Trace của run
+                </h3>
+                <dl className="space-y-2 text-sm">
+                  <div>
+                    <dt className="text-[#7d8490]">Backend status</dt>
+                    <dd className="font-mono text-[#252932]">
+                      {generationResult.backendStatus}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#7d8490]">Attempt count</dt>
+                    <dd>{generationResult.attemptCount}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#7d8490]">Prompt version</dt>
+                    <dd className="break-all">
+                      {generationResult.promptVersion}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#7d8490]">Corpus version</dt>
+                    <dd className="break-all">
+                      {generationResult.corpusVersion}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#7d8490]">Cấu hình</dt>
+                    <dd className="font-mono text-xs">
+                      topK={generationConfig.topK}, embeddingK=
+                      {generationConfig.embeddingK}, bm25K=
+                      {generationConfig.bm25K}, alpha=
+                      {generationConfig.alpha.toFixed(2)}
+                    </dd>
+                  </div>
+                </dl>
+
+                <h4 className="font-semibold text-sm text-[#252932] mt-5 mb-2">
+                  Backend timings
+                </h4>
+                {Object.keys(generationResult.timingsMs).length === 0 ? (
+                  <p className="text-sm text-[#7d8490]">
+                    Backend không trả timing chi tiết.
+                  </p>
+                ) : (
+                  <ul className="space-y-1 text-sm font-mono">
+                    {Object.entries(generationResult.timingsMs).map(
+                      ([name, value]) => (
+                        <li
+                          key={name}
+                          className="flex justify-between gap-3"
+                        >
+                          <span>{name}</span>
+                          <span>{value.toFixed(1)} ms</span>
+                        </li>
+                      ),
+                    )}
+                  </ul>
+                )}
+              </aside>
+            </div>
+
+            {!generationResult.validationPassed && (
+              <div
+                role="alert"
+                className="mt-5 rounded-lg border border-[#ebcb97] bg-[#fff5e5] p-4"
+              >
+                <h3 className="font-semibold text-[#7b4c13] mb-2">
+                  Validation errors
+                </h3>
+                {generationResult.validationErrors.length === 0 ? (
+                  <p className="text-sm text-[#7b4c13]">
+                    Backend đánh dấu không đạt nhưng không trả chi tiết.
+                  </p>
+                ) : (
+                  <ul className="list-disc pl-5 text-sm text-[#7b4c13]">
+                    {generationResult.validationErrors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="mt-6">
+              <h3 className="font-semibold text-[#252932] mb-3">
+                Nguồn của generation run ({generationResult.sources.length})
+              </h3>
+              {generationResult.sources.length === 0 ? (
+                <p className="rounded-lg border border-[#e4e1da] bg-white p-5 text-sm text-[#5f6673]">
+                  Backend không trả source cho generation này.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {generationResult.sources.map((source) => (
+                    <SourceCard
+                      key={source.id}
+                      source={source}
+                      showScores
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }

@@ -2,12 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import Badge from "../components/Badge";
-import { POETRY_FORM_LABELS, EXAMPLE_PROMPTS, type PoetryForm } from "../types";
-
-const poetryForms = Object.entries(POETRY_FORM_LABELS) as [
-  PoetryForm,
-  string,
-][];
+import { EXAMPLE_PROMPTS } from "../data/examples";
+import { useMetadata } from "../hooks/useMetadata";
 
 const benefits = [
   {
@@ -107,19 +103,46 @@ const examplePoem = {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+
+  const {
+    poetryForms,
+    loading: metadataLoading,
+    error: metadataError,
+    reload: reloadMetadata,
+  } = useMetadata();
+
   const [openingVerse, setOpeningVerse] = useState("");
-  const [selectedForm, setSelectedForm] = useState<PoetryForm | "">("");
-  const [errors, setErrors] = useState<{ verse?: string; form?: string }>({});
+  const [selectedForm, setSelectedForm] = useState("");
+  const [errors, setErrors] = useState<{
+    verse?: string;
+    form?: string;
+  }>({});
+
+  const metadataReady =
+    !metadataLoading && !metadataError && poetryForms.length > 0;
 
   function handleStart() {
     const newErrors: typeof errors = {};
-    if (!openingVerse.trim()) newErrors.verse = "Vui lòng nhập câu thơ mở đầu.";
-    if (!selectedForm) newErrors.form = "Vui lòng chọn thể thơ.";
+
+    if (!openingVerse.trim()) {
+      newErrors.verse = "Vui lòng nhập câu thơ mở đầu.";
+    }
+
+    if (!selectedForm) {
+      newErrors.form = "Vui lòng chọn thể thơ.";
+    }
+
     setErrors(newErrors);
-    if (Object.keys(newErrors).length) return;
+
+    if (Object.keys(newErrors).length > 0) {
+      return;
+    }
 
     navigate("/sang-tac", {
-      state: { openingVerse: openingVerse.trim(), poetryForm: selectedForm },
+      state: {
+        openingVerse: openingVerse.trim(),
+        poetryForm: selectedForm,
+      },
     });
   }
 
@@ -228,24 +251,73 @@ export default function LandingPage() {
                 >
                   Thể thơ
                 </label>
+                {metadataError && (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-lg border border-[#edb8b8] bg-[#fceeee] p-4"
+                  >
+                    <p className="text-sm text-[#b54747] mb-3">
+                      Không thể tải danh sách thể thơ từ backend.
+                    </p>
+
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={reloadMetadata}
+                    >
+                      Thử lại
+                    </Button>
+                  </div>
+                )}
+                {!metadataLoading &&
+                  !metadataError &&
+                  poetryForms.length === 0 && (
+                    <div
+                      role="alert"
+                      className="mb-4 rounded-lg border border-[#ebcb97] bg-[#fff5e5] p-4"
+                    >
+                      <p className="text-sm text-[#7b4c13] mb-3">
+                        Backend chưa cung cấp thể thơ nào.
+                      </p>
+
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={reloadMetadata}
+                      >
+                        Tải lại
+                      </Button>
+                    </div>
+                  )}
                 <select
                   id="poetry-form"
                   value={selectedForm}
-                  onChange={(e) => {
-                    setSelectedForm(e.target.value as PoetryForm);
-                    if (errors.form)
-                      setErrors((prev) => ({ ...prev, form: undefined }));
+                  onChange={(event) => {
+                    setSelectedForm(event.target.value);
+
+                    if (errors.form) {
+                      setErrors((current) => ({
+                        ...current,
+                        form: undefined,
+                      }));
+                    }
                   }}
+                  disabled={!metadataReady}
                   aria-describedby={errors.form ? "form-error" : undefined}
-                  aria-invalid={!!errors.form}
-                  className={`w-full px-4 py-3 rounded-lg border text-base text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] transition-colors cursor-pointer ${
+                  aria-invalid={Boolean(errors.form)}
+                  className={`w-full px-4 py-3 rounded-lg border text-base text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:bg-[#f4f2ed] disabled:text-[#7d8490] ${
                     errors.form ? "border-[#b54747]" : "border-[#d5d2ca]"
                   }`}
                 >
-                  <option value="">Chọn thể thơ</option>
-                  {poetryForms.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
+                  <option value="">
+                    {metadataLoading ? "Đang tải thể thơ..." : "Chọn thể thơ"}
+                  </option>
+
+                  {poetryForms.map((form) => (
+                    <option key={form.key} value={form.value}>
+                      {form.value}
                     </option>
                   ))}
                 </select>
@@ -261,12 +333,14 @@ export default function LandingPage() {
               </div>
 
               <Button
+                type="button"
                 onClick={handleStart}
                 size="lg"
                 className="w-full"
                 aria-label="Bắt đầu sáng tác bài thơ"
+                disabled={!metadataReady}
               >
-                Bắt đầu sáng tác
+                {metadataLoading ? "Đang tải cấu hình..." : "Bắt đầu sáng tác"}
               </Button>
             </div>
           </div>
@@ -432,14 +506,29 @@ export default function LandingPage() {
             Thể thơ được hỗ trợ
           </h2>
           <div className="flex flex-wrap justify-center gap-3">
-            {poetryForms.map(([, label]) => (
-              <span
-                key={label}
-                className="px-4 py-2 rounded-full border border-[#d5d2ca] bg-white text-sm font-medium text-[#5f6673] hover:border-[#d6b98c] hover:bg-[#fef9f0] transition-colors"
+            {metadataLoading ? (
+              <p className="text-sm text-[#7d8490]">
+                Đang tải danh sách thể thơ...
+              </p>
+            ) : metadataError ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={reloadMetadata}
               >
-                {label}
-              </span>
-            ))}
+                Thử tải lại danh sách thể thơ
+              </Button>
+            ) : (
+              poetryForms.map((form) => (
+                <span
+                  key={form.key}
+                  className="px-4 py-2 rounded-full border border-[#d5d2ca] bg-white text-sm font-medium text-[#5f6673] hover:border-[#d6b98c] hover:bg-[#fef9f0] transition-colors"
+                >
+                  {form.value}
+                </span>
+              ))
+            )}
           </div>
         </div>
       </section>

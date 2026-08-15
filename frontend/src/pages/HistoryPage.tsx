@@ -5,11 +5,7 @@ import Badge from "../components/Badge";
 import Modal from "../components/Modal";
 import { showToast } from "../components/Toast";
 import { getHistory, deletePoem, clearHistory } from "../store";
-import {
-  POETRY_FORM_LABELS,
-  PERIOD_LABELS,
-  type GeneratedPoem,
-} from "../types";
+import type { GeneratedPoem } from "../types";
 
 type SortOption = "newest" | "oldest" | "title";
 
@@ -24,6 +20,11 @@ export default function HistoryPage() {
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => setPoems(getHistory()), []);
+
+  const formOptions = Array.from(
+    new Set(poems.map((poem) => poem.poetryForm.trim()).filter(Boolean)),
+  ).sort((left, right) => left.localeCompare(right, "vi"));
+
   useEffect(() => {
     load();
   }, [load]);
@@ -34,9 +35,10 @@ export default function HistoryPage() {
     try {
       deletePoem(deleteTarget);
       load();
-      showToast("Đã xóa bài thơ.", "success");
-    } catch {
-      showToast("Không thể xóa bài thơ.", "error");
+      showToast("Đã xóa bài thơ khỏi thiết bị này.", "success");
+    } catch (error: unknown) {
+      console.error("Failed to delete local poem", error);
+      showToast("Không thể xóa bài thơ khỏi thiết bị.", "error");
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -44,10 +46,16 @@ export default function HistoryPage() {
   }
 
   function handleClear() {
-    clearHistory();
-    load();
-    setClearConfirm(false);
-    showToast("Đã xóa toàn bộ lịch sử.", "success");
+    try {
+      clearHistory();
+      load();
+      setClearConfirm(false);
+
+      showToast("Đã xóa toàn bộ lịch sử trên thiết bị.", "success");
+    } catch (error: unknown) {
+      console.error("Failed to clear local history", error);
+      showToast("Không thể xóa lịch sử trên thiết bị.", "error");
+    }
   }
 
   let filtered = poems;
@@ -76,11 +84,11 @@ export default function HistoryPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-[#252932]">
-            Lịch sử sáng tác
+            Lịch sử trên thiết bị này
           </h1>
+
           <p className="text-[#5f6673] mt-1">
-            Xem lại, chỉnh sửa hoặc tạo phiên bản mới từ những bài thơ trước
-            đây.
+            Các bài thơ đã được cache hoặc đánh dấu trên trình duyệt hiện tại.
           </p>
         </div>
         <Button onClick={() => navigate("/sang-tac")}>Tạo bài thơ mới</Button>
@@ -88,8 +96,8 @@ export default function HistoryPage() {
 
       {/* Storage notice */}
       <div className="bg-[#fff5e5] border border-[#ebcb97] rounded-lg px-4 py-2.5 text-sm text-[#7b4c13] mb-6">
-        Lịch sử được lưu trên trình duyệt hiện tại và có thể bị mất khi dữ liệu
-        trình duyệt bị xóa.
+        Xóa bài thơ tại đây chỉ xóa dữ liệu trên trình duyệt hiện tại, không xóa
+        bản generation đã lưu.
       </div>
 
       {/* Filters */}
@@ -126,9 +134,9 @@ export default function HistoryPage() {
           className="px-3 py-2.5 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] cursor-pointer"
         >
           <option value="">Tất cả thể thơ</option>
-          {Object.entries(POETRY_FORM_LABELS).map(([v, l]) => (
-            <option key={v} value={v}>
-              {l}
+          {formOptions.map((value) => (
+            <option key={value} value={value}>
+              {value}
             </option>
           ))}
         </select>
@@ -221,7 +229,7 @@ export default function HistoryPage() {
       <Modal
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        title="Xác nhận xóa"
+        title="Xóa khỏi thiết bị"
         size="sm"
         footer={
           <>
@@ -233,13 +241,14 @@ export default function HistoryPage() {
               loading={deleting}
               onClick={handleDelete}
             >
-              Xóa
+              Xóa khỏi thiết bị
             </Button>
           </>
         }
       >
         <p className="text-[#5f6673]">
-          Bạn có chắc muốn xóa bài thơ này? Thao tác này không thể hoàn tác.
+          Bài thơ sẽ bị xóa khỏi trình duyệt hiện tại. Bản ghi trên backend
+          không bị xóa.
         </p>
       </Modal>
 
@@ -247,7 +256,7 @@ export default function HistoryPage() {
       <Modal
         open={clearConfirm}
         onClose={() => setClearConfirm(false)}
-        title="Xóa toàn bộ lịch sử"
+        title="Xóa lịch sử trên thiết bị"
         size="sm"
         footer={
           <>
@@ -255,14 +264,14 @@ export default function HistoryPage() {
               Hủy
             </Button>
             <Button variant="destructive" onClick={handleClear}>
-              Xóa tất cả
+              Xóa khỏi thiết bị
             </Button>
           </>
         }
       >
         <p className="text-[#5f6673]">
-          Thao tác này sẽ xóa toàn bộ lịch sử trên trình duyệt và không thể hoàn
-          tác.
+          Toàn bộ cache và bookmark trên trình duyệt hiện tại sẽ bị xóa. Các
+          generation trong database backend vẫn được giữ nguyên.
         </p>
       </Modal>
     </div>
@@ -294,17 +303,23 @@ function HistoryCard({
             "{poem.openingVerse}"
           </p>
         </div>
-        {poem.saved && (
-          <Badge variant="success" className="flex-shrink-0">
-            Đã lưu
-          </Badge>
-        )}
+        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+          {poem.serverPersisted && (
+            <Badge variant="success">Đã lưu trên máy chủ</Badge>
+          )}
+
+          {poem.saved && (
+            <Badge variant="accent">Đã đánh dấu trên thiết bị</Badge>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5 mb-3">
-        <Badge variant="secondary">{POETRY_FORM_LABELS[poem.poetryForm]}</Badge>
-        {poem.period && (
-          <Badge variant="outline">{PERIOD_LABELS[poem.period]}</Badge>
+        <Badge variant="secondary">
+          {poem.poetryForm.trim() || "Không xác định thể thơ"}
+        </Badge>
+        {poem.period.trim() && (
+          <Badge variant="outline">{poem.period.trim()}</Badge>
         )}
         {poem.authorStyle && (
           <Badge variant="outline">{poem.authorStyle}</Badge>
@@ -332,10 +347,10 @@ function HistoryCard({
           </button>
           <button
             onClick={onDelete}
-            aria-label={`Xóa bài thơ ${poem.title}`}
+            aria-label={`Xóa bài thơ ${poem.title} khỏi thiết bị`}
             className="text-xs px-2.5 py-1.5 rounded border border-[#d5d2ca] text-[#7d8490] hover:border-[#edb8b8] hover:text-[#b54747] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789]"
           >
-            Xóa
+            Xóa khỏi thiết bị
           </button>
           <button
             onClick={onOpen}

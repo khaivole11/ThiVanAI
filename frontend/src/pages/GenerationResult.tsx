@@ -7,12 +7,7 @@ import SourceDetailDrawer from "../components/SourceDetailDrawer";
 import Modal from "../components/Modal";
 import { showToast } from "../components/Toast";
 import { getPoemById, savePoem } from "../store";
-import {
-  POETRY_FORM_LABELS,
-  PERIOD_LABELS,
-  type GeneratedPoem,
-  type SourcePoem,
-} from "../types";
+import type { GeneratedPoem, SourcePoem } from "../types";
 
 const feedbackOptions = [
   { key: "relevant", label: "Phù hợp với yêu cầu" },
@@ -71,21 +66,26 @@ export default function GenerationResult() {
       });
   }
 
-  function handleSavePoem() {
+  function handleBookmarkPoem() {
     if (!poem) return;
+
     setSaving(true);
+
     try {
       const updated: GeneratedPoem = {
         ...poem,
         saved: true,
-        title: saveTitle || poem.title,
+        title: saveTitle.trim() || poem.title,
       };
+
       savePoem(updated);
       setPoem(updated);
-      showToast("Đã lưu bài thơ vào lịch sử.", "success");
+
+      showToast("Đã đánh dấu bài thơ trên thiết bị này.", "success");
       setShowSaveModal(false);
-    } catch {
-      showToast("Không thể lưu bài thơ.", "error");
+    } catch (error: unknown) {
+      console.error("Failed to bookmark local poem", error);
+      showToast("Không thể đánh dấu bài thơ trên thiết bị.", "error");
     } finally {
       setSaving(false);
     }
@@ -149,6 +149,8 @@ export default function GenerationResult() {
                 state: {
                   openingVerse: poem.openingVerse,
                   poetryForm: poem.poetryForm,
+                  authorStyle: poem.authorStyle,
+                  period: poem.period,
                 },
               })
             }
@@ -160,7 +162,17 @@ export default function GenerationResult() {
           <h1 className="text-lg font-semibold text-[#252932]">
             Kết quả sáng tác
           </h1>
-          {!poem.saved && <Badge variant="warning">Chưa lưu</Badge>}
+          <div className="flex flex-wrap items-center gap-2">
+            {poem.serverPersisted && (
+              <Badge variant="success">Đã lưu trên máy chủ</Badge>
+            )}
+
+            {poem.saved ? (
+              <Badge variant="accent">Đã đánh dấu trên thiết bị</Badge>
+            ) : (
+              <Badge variant="outline">Chưa đánh dấu trên thiết bị</Badge>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -246,7 +258,7 @@ export default function GenerationResult() {
                   </svg>
                 }
               >
-                {poem.saved ? "Đã lưu" : "Lưu bài thơ"}
+                {poem.saved ? "Đã đánh dấu" : "Đánh dấu bài thơ"}
               </Button>
               <Button
                 variant="secondary"
@@ -269,13 +281,13 @@ export default function GenerationResult() {
             {/* Metadata */}
             <div className="flex flex-wrap gap-2 mb-6">
               <Badge variant="secondary">
-                {POETRY_FORM_LABELS[poem.poetryForm]}
+                {poem.poetryForm.trim() || "Không xác định thể thơ"}
               </Badge>
               {poem.authorStyle && (
                 <Badge variant="outline">Phong cách: {poem.authorStyle}</Badge>
               )}
-              {poem.period && (
-                <Badge variant="outline">{PERIOD_LABELS[poem.period]}</Badge>
+              {poem.period.trim() && (
+                <Badge variant="outline">{poem.period.trim()}</Badge>
               )}
               <Badge variant="outline">{poem.topK} bài tham khảo</Badge>
             </div>
@@ -462,14 +474,14 @@ export default function GenerationResult() {
       <Modal
         open={showSaveModal}
         onClose={() => setShowSaveModal(false)}
-        title="Lưu bài thơ"
+        title="Đánh dấu bài thơ"
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowSaveModal(false)}>
               Hủy
             </Button>
-            <Button loading={saving} onClick={handleSavePoem}>
-              Lưu vào lịch sử
+            <Button loading={saving} onClick={handleBookmarkPoem}>
+              Đánh dấu trên thiết bị
             </Button>
           </>
         }
@@ -510,8 +522,8 @@ export default function GenerationResult() {
             />
           </div>
           <div className="bg-[#fff5e5] border border-[#ebcb97] rounded-lg px-3 py-2.5 text-xs text-[#7b4c13]">
-            Lịch sử được lưu trên trình duyệt hiện tại và có thể bị mất khi dữ
-            liệu trình duyệt bị xóa.
+            Tiêu đề và trạng thái đánh dấu được lưu trên trình duyệt hiện tại.
+            Bản generation gốc đã được lưu riêng trên máy chủ.
           </div>
         </div>
       </Modal>

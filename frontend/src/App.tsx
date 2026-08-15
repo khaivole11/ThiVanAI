@@ -83,7 +83,7 @@ export default function App() {
                   href="/"
                   className="text-[#3f4a6b] hover:underline font-medium"
                 >
-                  ← Về trang chủ
+                  <i className="fa-solid fa-arrow-left"></i> Về trang chủ
                 </a>
               </div>
             </Layout>
