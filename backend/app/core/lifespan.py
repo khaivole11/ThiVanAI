@@ -14,6 +14,7 @@ from app.domain.rules.validators import PoetryValidator
 from app.domain.services.context_builder import ContextBuilderService
 from app.domain.services.generation_orchestrator import GenerationOrchestrator
 from app.domain.services.hybrid_retriever import HybridRetrieverService
+from app.domain.services.poem_analysis import PoemAnalysisService
 from app.domain.services.request_normalizer import RequestNormalizer
 
 @asynccontextmanager
@@ -75,11 +76,18 @@ async def lifespan(app: FastAPI):
         max_validation_retries=settings.GENERATION_MAX_VALIDATION_RETRIES,
         title_excerpt_characters=settings.GENERATION_TITLE_EXCERPT_CHARACTERS,
     )
+    poem_analysis_service = PoemAnalysisService(
+        generator_adapter=generator,
+        temperature=settings.ANALYSIS_TEMPERATURE,
+        max_output_tokens=settings.ANALYSIS_MAX_OUTPUT_TOKENS,
+        timeout_seconds=settings.ANALYSIS_TIMEOUT_SECONDS,
+    )
     app.state.manifest = manifest
     app.state.resources = resources
     app.state.retriever = retriever
     app.state.repository = repository
     app.state.orchestrator = orchestrator
+    app.state.poem_analysis_service = poem_analysis_service
 
     logger.info("=== FastAPI Lifespan initialization completed successfully ===")
     try:

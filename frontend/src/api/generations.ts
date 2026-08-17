@@ -1,8 +1,10 @@
 import { apiRequest } from "./client";
 import type {
+  AnalyzePoemRequestDto,
   GeneratePoemRequestDto,
   GeneratePoemResponseDto,
   HistoryListResponseDto,
+  PoemAnalysisResponseDto,
 } from "./contracts";
 
 export function createGeneration(
@@ -23,6 +25,17 @@ export function listGenerations(page = 1, pageSize = 20, signal?: AbortSignal) {
   });
 
   return apiRequest<HistoryListResponseDto>(`/generations?${query}`, {
+    signal,
+  });
+}
+
+export function analyzePoem(
+  body: AnalyzePoemRequestDto,
+  signal?: AbortSignal,
+) {
+  return apiRequest<PoemAnalysisResponseDto>("/generations/analyze", {
+    method: "POST",
+    body: JSON.stringify(body),
     signal,
   });
 }

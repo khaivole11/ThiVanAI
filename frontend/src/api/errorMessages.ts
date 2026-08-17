@@ -12,7 +12,7 @@ export function toUserMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
     switch (error.code) {
       case 'GENERATOR_UNAVAILABLE':
-        return 'Dịch vụ sinh thơ hiện chưa sẵn sàng. Vui lòng thử lại sau.'
+        return 'Dịch vụ AI hiện chưa sẵn sàng. Vui lòng thử lại sau.'
       case 'RETRIEVAL_UNAVAILABLE':
         return 'Dịch vụ truy xuất nguồn thơ hiện chưa sẵn sàng.'
       default:

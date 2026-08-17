@@ -6,8 +6,10 @@ import SourceCard from "../components/SourceCard";
 import SourceDetailDrawer from "../components/SourceDetailDrawer";
 import Modal from "../components/Modal";
 import { showToast } from "../components/Toast";
+import { analyzePoem } from "../api/generations";
+import { isAbortError, toUserMessage } from "../api/errorMessages";
 import { getPoemById, savePoem } from "../store";
-import type { GeneratedPoem, SourcePoem } from "../types";
+import type { GeneratedPoem, PoemAnalysis, SourcePoem } from "../types";
 
 const feedbackOptions = [
   { key: "relevant", label: "Phù hợp với yêu cầu" },
@@ -26,6 +28,196 @@ const quickRefinements = [
   "Giữ sát câu mở đầu hơn",
 ];
 
+interface PoemAnalysisPanelProps {
+  analysis: PoemAnalysis | null;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+}
+
+function PoemAnalysisPanel({
+  analysis,
+  loading,
+  error,
+  onRetry,
+}: PoemAnalysisPanelProps) {
+  const strengths = analysis?.qualityReview.strengths ?? [];
+  const weaknesses = analysis?.qualityReview.weaknesses ?? [];
+  const suggestions = analysis?.qualityReview.revisionSuggestions ?? [];
+  const devices = analysis?.literaryDevices ?? [];
+
+  return (
+    <section
+      className="bg-white border border-[#e4e1da] rounded-xl p-6"
+      aria-label="Phân tích bài thơ"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-1">
+            AI phân tích
+          </p>
+          <h3 className="font-semibold text-[#252932]">Phân tích bài thơ</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {loading && <Badge variant="outline">Đang phân tích</Badge>}
+          {analysis && !loading && (
+            <Badge variant="success">
+              Chất lượng {analysis.qualityReview.score}/10
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {loading && (
+        <div className="space-y-4" aria-live="polite">
+          <div className="skeleton h-4 rounded w-11/12" />
+          <div className="skeleton h-4 rounded w-8/12" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="skeleton h-3 rounded w-24" />
+                <div className="skeleton h-4 rounded w-full" />
+                <div className="skeleton h-4 rounded w-9/12" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="bg-[#fff5e5] border border-[#ebcb97] rounded-lg p-4">
+          <p className="text-sm font-semibold text-[#7b4c13] mb-1">
+            Chưa thể phân tích bài thơ
+          </p>
+          <p className="text-sm text-[#7b4c13] mb-3">{error}</p>
+          <Button size="sm" variant="secondary" onClick={onRetry}>
+            Thử lại phân tích
+          </Button>
+        </div>
+      )}
+
+      {!loading && !error && analysis && (
+        <div className="space-y-5">
+          <p className="text-sm text-[#4d5462] leading-relaxed break-words">
+            {analysis.summary}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x divide-[#e4e1da] gap-y-4">
+            <div className="md:pr-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-2">
+                Hình thức
+              </p>
+              <p className="text-sm font-medium text-[#252932]">
+                {analysis.form.poemType} · {analysis.form.lineCount} dòng
+              </p>
+              <p className="text-sm text-[#5f6673] mt-1">
+                {analysis.form.rhymePattern}
+              </p>
+              <p className="text-sm text-[#5f6673] mt-1">
+                {analysis.form.rhythmNotes}
+              </p>
+            </div>
+
+            <div className="md:px-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-2">
+                Tầng nghĩa
+              </p>
+              <p className="text-sm font-medium text-[#252932]">
+                {analysis.meaning.mainTheme}
+              </p>
+              <p className="text-sm text-[#5f6673] mt-1">
+                Giọng điệu: {analysis.meaning.emotionalTone}
+              </p>
+              <p className="text-sm text-[#5f6673] mt-1">
+                {analysis.meaning.message}
+              </p>
+            </div>
+
+            <div className="md:pl-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-2">
+                Dễ hiểu
+              </p>
+              <p className="text-sm text-[#5f6673] leading-relaxed">
+                {analysis.studentFriendlyAnalysis}
+              </p>
+            </div>
+          </div>
+
+          {devices.length > 0 && (
+            <div className="border-t border-[#e4e1da] pt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-3">
+                Biện pháp nghệ thuật
+              </p>
+              <ul className="space-y-2">
+                {devices.slice(0, 4).map((device, index) => (
+                  <li key={`${device.type}-${index}`} className="text-sm">
+                    <span className="font-medium text-[#252932]">
+                      {device.type}
+                    </span>
+                    {device.quote && (
+                      <span className="text-[#5f6673]">: "{device.quote}"</span>
+                    )}
+                    <span className="text-[#5f6673]"> — {device.effect}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="border-t border-[#e4e1da] pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-2">
+                Điểm mạnh
+              </p>
+              <ul className="space-y-1.5">
+                {(strengths.length ? strengths : ["Có mạch biểu đạt rõ."]).map(
+                  (item, index) => (
+                    <li key={index} className="text-sm text-[#5f6673]">
+                      {item}
+                    </li>
+                  ),
+                )}
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-2">
+                Cần lưu ý
+              </p>
+              <ul className="space-y-1.5">
+                {(weaknesses.length
+                  ? weaknesses
+                  : ["Chưa có điểm yếu nổi bật."]
+                ).map((item, index) => (
+                  <li key={index} className="text-sm text-[#5f6673]">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-2">
+                Gợi ý sửa
+              </p>
+              <ul className="space-y-1.5">
+                {(suggestions.length
+                  ? suggestions
+                  : ["Giữ nguyên phiên bản hiện tại."]
+                ).map((item, index) => (
+                  <li key={index} className="text-sm text-[#5f6673]">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function GenerationResult() {
   const { generationId } = useParams<{ generationId: string }>();
   const navigate = useNavigate();
@@ -41,6 +233,9 @@ export default function GenerationResult() {
   const [saveNote, setSaveNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [showSourcesPanel, setShowSourcesPanel] = useState(true);
+  const [analysis, setAnalysis] = useState<PoemAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!generationId) return;
@@ -48,10 +243,73 @@ export default function GenerationResult() {
     if (found) {
       setPoem(found);
       setSaveTitle(found.title);
+      setAnalysis(found.analysis ?? null);
     } else {
       setNotFound(true);
     }
   }, [generationId]);
+
+  useEffect(() => {
+    if (!poem) return;
+    if (poem.analysis) {
+      setAnalysis(poem.analysis);
+      setAnalysisLoading(false);
+      setAnalysisError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    void loadAnalysis(poem, controller.signal);
+
+    return () => controller.abort();
+  }, [poem?.id]);
+
+  async function loadAnalysis(
+    targetPoem: GeneratedPoem,
+    signal?: AbortSignal,
+  ) {
+    setAnalysis(null);
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+
+    try {
+      const result = await analyzePoem(
+        {
+          title: targetPoem.title,
+          lines: targetPoem.lines,
+          fullText: targetPoem.fullText,
+          poetryForm: targetPoem.poetryForm,
+          openingVerse: targetPoem.openingVerse,
+          authorStyle: targetPoem.authorStyle || undefined,
+          periodStyle: targetPoem.period || undefined,
+        },
+        signal,
+      );
+
+      if (signal?.aborted) return;
+
+      const latestPoem = getPoemById(targetPoem.id) ?? targetPoem;
+      const updatedPoem: GeneratedPoem = {
+        ...latestPoem,
+        analysis: result,
+      };
+
+      setAnalysis(result);
+      try {
+        savePoem(updatedPoem);
+      } catch (storageError: unknown) {
+        console.warn("Failed to cache poem analysis", storageError);
+      }
+      setPoem((current) =>
+        current?.id === targetPoem.id ? { ...current, analysis: result } : current,
+      );
+    } catch (error: unknown) {
+      if (signal?.aborted || isAbortError(error)) return;
+      setAnalysisError(toUserMessage(error));
+    } finally {
+      if (!signal?.aborted) setAnalysisLoading(false);
+    }
+  }
 
   function handleCopy() {
     if (!poem) return;
@@ -98,6 +356,11 @@ export default function GenerationResult() {
       else next.add(key);
       return next;
     });
+  }
+
+  function handleRetryAnalysis() {
+    if (!poem) return;
+    void loadAnalysis(poem);
   }
 
   const sourceIndex =
@@ -328,6 +591,14 @@ export default function GenerationResult() {
               <span>AI-generated — Không đại diện tác giả thực</span>
             </div>
           </article>
+
+          {/* Poem analysis */}
+          <PoemAnalysisPanel
+            analysis={analysis}
+            loading={analysisLoading}
+            error={analysisError}
+            onRetry={handleRetryAnalysis}
+          />
 
           {/* Refine section */}
           <div className="bg-white border border-[#e4e1da] rounded-xl p-6">
