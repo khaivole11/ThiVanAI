@@ -4,9 +4,9 @@ Thi Vận AI là ứng dụng thử nghiệm sáng tác thơ tiếng Việt. D�
 
 - `frontend`: giao diện React + Vite để nhập câu thơ mở đầu, chọn thể thơ, xem kết quả và thử chế độ nghiên cứu.
 - `backend`: API FastAPI cho pipeline RAG, gồm ingest dữ liệu thơ, Chroma vector search, BM25, sinh thơ bằng Ollama hoặc OpenAI, và lưu lịch sử bằng SQLite.
-- `data`: corpus, index Chroma/BM25, manifest và SQLite database.
+- `backend/data`: corpus, index Chroma/BM25, manifest và SQLite database hiện tại.
 
-> Lưu ý: frontend hiện đang dùng dữ liệu mô phỏng trong `frontend/src/store.ts`, nên có thể chạy và demo giao diện mà không cần backend. Backend là API riêng để chạy pipeline RAG thật.
+> Lưu ý: frontend hiện đã gọi backend qua `/api/v1`. Muốn chạy giao diện đầy đủ, hãy chạy backend trước rồi chạy frontend.
 
 ## Yêu cầu môi trường
 
@@ -15,16 +15,39 @@ Thi Vận AI là ứng dụng thử nghiệm sáng tác thơ tiếng Việt. D�
 - Một trong hai provider để sinh thơ:
   - Ollama, nếu dùng cấu hình mặc định `GENERATION_PROVIDER=ollama`.
   - OpenAI API key, nếu đổi sang `GENERATION_PROVIDER=openai`.
-- Dữ liệu trong thư mục `data`. Nếu thiếu manifest hoặc index, cần chạy bước ingest ở phần bên dưới.
+- Dữ liệu trong thư mục `backend/data`. Nếu thiếu manifest hoặc index, cần chạy bước ingest ở phần bên dưới.
+
+Bạn có thể dùng Python `venv`, conda, pyenv hoặc môi trường Python khác. README mặc định dùng `venv` vì chạy được trên nhiều máy nhất; conda chỉ là tùy chọn.
 
 ## Chạy nhanh frontend
 
-Mở terminal tại thư mục gốc dự án:
+Chạy backend trước, sau đó mở terminal khác tại thư mục gốc dự án.
+
+Windows PowerShell:
 
 ```powershell
 cd frontend
+Copy-Item .env.example .env
 npm install
 npm run dev
+```
+
+macOS/Linux:
+
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+`frontend/.env` tối thiểu:
+
+```env
+FRONTEND_DEV_HOST=0.0.0.0
+FRONTEND_DEV_PORT=8443
+BACKEND_PROXY_TARGET=http://127.0.0.1:8001
+VITE_API_BASE_URL=/api/v1
 ```
 
 Sau đó mở:
@@ -36,26 +59,39 @@ http://localhost:8443
 Nếu cổng `8443` đang bận, đổi cổng trước khi chạy:
 
 ```powershell
-$env:PORT=5173
+$env:FRONTEND_DEV_PORT=5173
 npm run dev
+```
+
+macOS/Linux:
+
+```bash
+FRONTEND_DEV_PORT=5173 npm run dev
 ```
 
 Các trang chính:
 
-- `/`: trang giới thiệu.
-- `/sang-tac`: nhập câu thơ và tạo bài thơ mô phỏng.
+- `/`: màn hình sáng tác chính.
+- `/sang-tac`: nhập câu thơ và gọi backend để tạo bài thơ.
+- `/ket-qua/:generationId`: kết quả một lần sinh thơ đã lưu trong localStorage.
 - `/lich-su`: lịch sử bài thơ đã lưu trong localStorage của trình duyệt.
-- `/nghien-cuu`: chế độ nghiên cứu RAG mô phỏng, có xuất JSON kết quả.
+- `/nghien-cuu`: chế độ nghiên cứu retrieval/generation với thông số RAG thật từ backend.
 - `/cach-hoat-dong`: mô tả cách hệ thống hoạt động.
 - `/ve-du-an`: thông tin dự án.
 
 ## Chạy backend API
 
-Từ thư mục gốc dự án:
+Các lệnh `cd backend` bên dưới giả định bạn đang mở terminal ở thư mục gốc repo. Nếu terminal đang ở `frontend`, chạy `cd ..\backend` trên Windows PowerShell hoặc `cd ../backend` trên macOS/Linux.
+
+Tất cả lệnh backend phải chạy từ thư mục `backend`, trừ lệnh có `--app-dir backend`. Nếu terminal đang ở `frontend`, `uvicorn app.main:app` sẽ lỗi `ModuleNotFoundError: No module named 'app'`.
+
+### Cách 1: Python venv khuyến nghị
+
+Windows PowerShell:
 
 ```powershell
 cd backend
-python -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
@@ -63,23 +99,67 @@ python -m pip install -e .
 Copy-Item .env.example .env
 ```
 
-Nếu PowerShell chặn activate virtualenv, chạy:
+Nếu PowerShell chặn activate virtualenv:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-Sau khi tạo `backend/.env`, nên chỉnh các đường dẫn dữ liệu để trỏ về thư mục `data` ở gốc dự án:
+macOS/Linux:
+
+```bash
+cd backend
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
+cp .env.example .env
+```
+
+Sau khi activate, kiểm tra:
+
+```powershell
+python --version
+python -c "import sys; print(sys.executable)"
+```
+
+Python phải là `3.11+`, và `sys.executable` phải nằm trong `.venv`.
+
+### Cách 2: Conda tùy chọn
+
+Nếu bạn dùng Anaconda/Miniconda, có thể đặt tên env tùy ý:
+
+```powershell
+cd backend
+conda create -n thi-van-ai python=3.11
+conda activate thi-van-ai
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
+Copy-Item .env.example .env
+```
+
+Nếu không muốn activate conda, thay `thi-van-ai` bằng tên env của bạn:
+
+```powershell
+conda run --no-capture-output -n thi-van-ai python -m pip install -r requirements.txt
+conda run --no-capture-output -n thi-van-ai python -m pip install -e .
+```
+
+### File môi trường backend
+
+Các đường dẫn mặc định trong `.env.example` đang đúng khi chạy từ thư mục `backend`:
 
 ```env
-DATA_DIR=../data
-CORPUS_PATH=../data/raw/final_poems_dataset.csv
-NORMALIZED_CORPUS_PATH=../data/processed/corpus_normalized.parquet
-CORPUS_MANIFEST_PATH=../data/manifests/current.json
-CHROMA_PATH=../data/indexes/chroma
-BM25_INDEX_PATH=../data/indexes/bm25/bm25_index.pkl
-SQLITE_URL=sqlite:///../data/app.db
+DATA_DIR=./data
+CORPUS_PATH=./data/raw/final_poems_dataset.csv
+NORMALIZED_CORPUS_PATH=./data/processed/corpus_normalized.parquet
+CORPUS_MANIFEST_PATH=./data/manifests/current.json
+CHROMA_PATH=./data/indexes/chroma
+BM25_INDEX_PATH=./data/indexes/bm25/bm25_index.pkl
+SQLITE_URL=sqlite:///./data/app.db
 ```
 
 ### Dùng Ollama
@@ -114,11 +194,31 @@ Không commit file `.env` vì có thể chứa secret.
 
 ### Khởi động server
 
-Trong thư mục `backend`, sau khi đã activate virtualenv:
+Từ thư mục `backend`, sau khi đã activate `venv` hoặc conda env:
 
 ```powershell
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
+
+Log đúng sẽ có dạng:
+
+```text
+Will watch for changes in these directories: ['...\\backend']
+```
+
+Nếu bạn đang đứng ở thư mục gốc repo, có thể chạy:
+
+```powershell
+python -m uvicorn --app-dir backend app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Nếu dùng conda mà không activate env, thay `<env-name>` bằng tên env của bạn:
+
+```powershell
+conda run --no-capture-output -n <env-name> python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Lệnh `conda run` này cũng phải chạy từ thư mục `backend`. Nếu chạy từ `frontend`, backend sẽ không import được module `app`.
 
 Kiểm tra server:
 
@@ -133,17 +233,16 @@ Nếu backend báo thiếu manifest, thiếu Chroma/BM25 index, hoặc bạn tha
 
 ```powershell
 cd backend
-.\.venv\Scripts\Activate.ps1
 python scripts/ingest_corpus.py
 ```
 
 Script này sẽ:
 
-- đọc `data/raw/final_poems_dataset.csv`;
-- tạo `data/processed/corpus_normalized.parquet`;
+- đọc `backend/data/raw/final_poems_dataset.csv`;
+- tạo `backend/data/processed/corpus_normalized.parquet`;
 - build/upsert Chroma index;
 - build BM25 index;
-- ghi manifest vào `data/manifests/current.json`.
+- ghi manifest vào `backend/data/manifests/current.json`.
 
 Lần đầu chạy embedding model có thể mất nhiều thời gian vì cần tải model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
 
@@ -195,11 +294,10 @@ Backend tests:
 
 ```powershell
 cd backend
-.\.venv\Scripts\Activate.ps1
 python -m pytest tests
 ```
 
-Nếu thiếu `pytest`, cài thêm trong virtualenv:
+Nếu thiếu `pytest`, cài thêm trong môi trường Python đang dùng:
 
 ```powershell
 python -m pip install pytest
@@ -207,8 +305,126 @@ python -m pip install pytest
 
 ## Lỗi thường gặp
 
-- `Corpus manifest is missing`: kiểm tra lại các đường dẫn trong `backend/.env`, hoặc chạy `python scripts/ingest_corpus.py`.
-- Server backend không start do `GENERATION_PROVIDER`: nếu dùng `openai` phải có `OPENAI_API_KEY`; nếu dùng `ollama` phải có `OLLAMA_BASE_URL` và `OLLAMA_MODEL`.
-- API sinh thơ lỗi kết nối Ollama: mở Ollama và chạy `ollama pull qwen3:1.7b`.
-- Frontend không chạy vì port bận: đặt `$env:PORT=5173` rồi chạy lại `npm run dev`.
-- Frontend tạo thơ nhưng không gọi backend: đây là hành vi hiện tại, vì frontend đang dùng mock generation trong `frontend/src/store.ts`.
+### `ModuleNotFoundError: No module named 'app'`
+
+Bạn đang chạy backend command sai thư mục, thường là đang đứng trong `frontend`.
+
+Nếu log có dòng như sau thì chắc chắn đang sai thư mục:
+
+```text
+Will watch for changes in these directories: ['...\\frontend']
+```
+
+Cách sửa:
+
+```powershell
+cd backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Nếu terminal hiện đang ở `frontend`:
+
+```powershell
+cd ..\backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Nếu đang đứng ở thư mục gốc repo và không muốn `cd backend`:
+
+```powershell
+python -m uvicorn --app-dir backend app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+### `ImportError: cannot import name 'Self' from 'typing'`
+
+Backend đang chạy bằng Python 3.10. Dự án cần Python 3.11+.
+
+Kiểm tra:
+
+```powershell
+python --version
+where.exe python
+```
+
+Tạo lại môi trường với Python 3.11+ rồi cài dependencies theo phần `Chạy backend API`.
+
+Nếu dùng conda và `conda activate` không đổi đúng Python, khởi tạo lại shell:
+
+```powershell
+conda init powershell
+```
+
+Đóng toàn bộ PowerShell, mở lại terminal mới rồi thử lại.
+
+### `conda run ... uvicorn` nhìn như không chạy
+
+Thêm `--no-capture-output` và chạy từ thư mục `backend`:
+
+```powershell
+cd backend
+conda run --no-capture-output -n <env-name> python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Nếu không thêm flag này, `conda run` có thể không in log Uvicorn ngay.
+
+### Kẹt ở `Waiting for application startup`
+
+Backend load Chroma và embedding model trong lifespan startup. Lần đầu có thể mất vài phút vì `sentence-transformers` kiểm tra hoặc tải file từ HuggingFace.
+
+Nếu log có dạng request tới `https://huggingface.co/...` bị chặn, kiểm tra mạng, firewall hoặc proxy. Nếu model đã được cache local và chỉ muốn chạy offline:
+
+```powershell
+$env:HF_HUB_OFFLINE="1"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Nếu model chưa có trong cache, bỏ `HF_HUB_OFFLINE` và cho phép tải model một lần:
+
+```powershell
+python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
+```
+
+### `Corpus manifest is missing`
+
+Kiểm tra `backend/.env` đang trỏ tới `./data/...` khi chạy từ thư mục `backend`, hoặc chạy lại ingest:
+
+```powershell
+cd backend
+python scripts/ingest_corpus.py
+```
+
+### Server backend không start do `GENERATION_PROVIDER`
+
+Nếu dùng `openai` phải có `OPENAI_API_KEY` và `OPENAI_MODEL`. Nếu dùng `ollama` phải có `OLLAMA_BASE_URL` và `OLLAMA_MODEL`.
+
+### API sinh thơ lỗi kết nối Ollama
+
+Mở Ollama và chạy:
+
+```powershell
+ollama pull qwen3:1.7b
+```
+
+### Frontend báo `BACKEND_PROXY_TARGET is required`
+
+Tạo `frontend/.env` từ `.env.example`:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env
+```
+
+### Frontend không chạy vì port bận
+
+Đặt port khác rồi chạy lại:
+
+```powershell
+$env:FRONTEND_DEV_PORT=5173
+npm run dev
+```
+
+macOS/Linux:
+
+```bash
+FRONTEND_DEV_PORT=5173 npm run dev
+```
