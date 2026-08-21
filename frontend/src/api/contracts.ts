@@ -62,6 +62,54 @@ export interface GeneratePoemResponseDto {
   createdAt: string;
 }
 
+export interface AnalyzePoemRequestDto {
+  title: string;
+  lines: string[];
+  fullText: string;
+  poetryForm: string;
+  openingVerse: string;
+  authorStyle?: string;
+  periodStyle?: string;
+}
+
+export interface PoemFormAnalysisDto {
+  poemType: string;
+  lineCount: number;
+  rhymePattern: string;
+  rhythmNotes: string;
+}
+
+export interface PoemMeaningAnalysisDto {
+  mainTheme: string;
+  emotionalTone: string;
+  message: string;
+}
+
+export interface LiteraryDeviceAnalysisDto {
+  type: string;
+  quote: string;
+  effect: string;
+}
+
+export interface QualityReviewDto {
+  score: number;
+  strengths: string[];
+  weaknesses: string[];
+  revisionSuggestions: string[];
+}
+
+export interface PoemAnalysisResponseDto {
+  summary: string;
+  form: PoemFormAnalysisDto;
+  meaning: PoemMeaningAnalysisDto;
+  literaryDevices: LiteraryDeviceAnalysisDto[];
+  qualityReview: QualityReviewDto;
+  studentFriendlyAnalysis: string;
+  provider: string;
+  model: string;
+  createdAt: string;
+}
+
 export interface SearchRequestDto {
   firstVerse: string;
   genre?: string;

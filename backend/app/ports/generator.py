@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 @dataclass(frozen=True)
 class GenerationInput:
@@ -7,6 +7,8 @@ class GenerationInput:
     temperature: float
     max_output_tokens: int
     timeout_seconds: float
+    response_format_name: str | None = None
+    response_format_schema: dict[str, Any] | None = None
 
 @dataclass(frozen=True)
 class GenerationOutput:

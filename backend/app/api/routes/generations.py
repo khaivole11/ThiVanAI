@@ -1,11 +1,25 @@
 from fastapi import APIRouter, Depends
 from app.schemas.common import ApiResponse
+from app.schemas.analysis import AnalyzePoemRequest, PoemAnalysisResponse
 from app.schemas.generation import GeneratePoemRequest, GeneratePoemResponse
 from app.domain.services.generation_orchestrator import GenerationOrchestrator
-from app.api.dependencies import get_generation_orchestrator, resolve_retrieval_parameters
+from app.domain.services.poem_analysis import PoemAnalysisService
+from app.api.dependencies import (
+    get_generation_orchestrator,
+    get_poem_analysis_service,
+    resolve_retrieval_parameters,
+)
 from app.core.config import settings
 
 router = APIRouter(prefix="/generations", tags=["Generation"])
+
+@router.post("/analyze", response_model=ApiResponse[PoemAnalysisResponse])
+async def analyze_poem_endpoint(
+    req: AnalyzePoemRequest,
+    analysis_service: PoemAnalysisService = Depends(get_poem_analysis_service)
+):
+    analysis = await analysis_service.analyze(req)
+    return ApiResponse(data=analysis)
 
 @router.post("", response_model=ApiResponse[GeneratePoemResponse])
 async def generate_poem_endpoint(

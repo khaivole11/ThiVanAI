@@ -20,6 +20,9 @@ class OllamaAdapter(IGeneratorAdapter):
                 "num_predict": request.max_output_tokens,
             }
         }
+        if request.response_format_schema is not None:
+            payload["format"] = "json"
+
         try:
             res = await self._client.post(url, json=payload, timeout=request.timeout_seconds)
             res.raise_for_status()

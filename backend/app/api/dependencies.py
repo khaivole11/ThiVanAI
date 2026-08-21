@@ -5,6 +5,7 @@ from fastapi import HTTPException, Request, status
 from app.core.config import settings
 from app.domain.services.hybrid_retriever import HybridRetrieverService
 from app.domain.services.generation_orchestrator import GenerationOrchestrator
+from app.domain.services.poem_analysis import PoemAnalysisService
 from app.ports.result_repository import IResultRepository
 
 @dataclass(frozen=True)
@@ -43,3 +44,6 @@ def get_result_repository(request: Request) -> IResultRepository:
 
 def get_generation_orchestrator(request: Request) -> GenerationOrchestrator:
     return request.app.state.orchestrator
+
+def get_poem_analysis_service(request: Request) -> PoemAnalysisService:
+    return request.app.state.poem_analysis_service

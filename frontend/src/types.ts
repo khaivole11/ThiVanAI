@@ -39,6 +39,36 @@ export interface SourcePoem {
   hybridScore?: number
 }
 
+export interface PoemAnalysis {
+  summary: string
+  form: {
+    poemType: string
+    lineCount: number
+    rhymePattern: string
+    rhythmNotes: string
+  }
+  meaning: {
+    mainTheme: string
+    emotionalTone: string
+    message: string
+  }
+  literaryDevices: Array<{
+    type: string
+    quote: string
+    effect: string
+  }>
+  qualityReview: {
+    score: number
+    strengths: string[]
+    weaknesses: string[]
+    revisionSuggestions: string[]
+  }
+  studentFriendlyAnalysis: string
+  provider: string
+  model: string
+  createdAt: string
+}
+
 export interface GeneratedPoem {
   id: string
   title: string
@@ -66,4 +96,5 @@ export interface GeneratedPoem {
   promptVersion: string
   corpusVersion: string
   timingsMs: Record<string, number>
+  analysis?: PoemAnalysis
 }
