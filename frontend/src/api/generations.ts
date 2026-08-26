@@ -1,6 +1,8 @@
 import { apiRequest } from "./client";
 import type {
   AnalyzePoemRequestDto,
+  FeedbackRequestDto,
+  FeedbackResponseDto,
   GeneratePoemRequestDto,
   GeneratePoemResponseDto,
   HistoryListResponseDto,
@@ -38,4 +40,19 @@ export function analyzePoem(
     body: JSON.stringify(body),
     signal,
   });
+}
+
+export function submitGenerationFeedback(
+  generationId: string,
+  body: FeedbackRequestDto,
+  signal?: AbortSignal,
+) {
+  return apiRequest<FeedbackResponseDto>(
+    `/generations/${encodeURIComponent(generationId)}/feedback`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
 }

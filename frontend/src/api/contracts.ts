@@ -110,6 +110,21 @@ export interface PoemAnalysisResponseDto {
   createdAt: string;
 }
 
+export interface FeedbackRequestDto {
+  rating: number;
+  labels?: string[];
+  comment?: string;
+}
+
+export interface FeedbackResponseDto {
+  id: string;
+  generationId: string;
+  rating: number;
+  labels: string[];
+  comment: string | null;
+  createdAt: string;
+}
+
 export interface SearchRequestDto {
   firstVerse: string;
   genre?: string;

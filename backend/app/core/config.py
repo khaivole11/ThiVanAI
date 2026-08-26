@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     MONGODB_URI: SecretStr | None = None
     MONGODB_DATABASE: str | None = None
 
+    SUPABASE_URL: str | None = None
+    SUPABASE_SECRET_KEY: SecretStr | None = None
+    SUPABASE_SERVICE_ROLE_KEY: SecretStr | None = None
+    SUPABASE_FEEDBACK_TABLE: str = "generation_feedback"
+    SUPABASE_TIMEOUT_SECONDS: float = Field(default=10.0, ge=1.0, le=60.0)
+
     RETRIEVAL_TOP_K: int = Field(default=5, ge=1, le=20)
     RETRIEVAL_MAX_TOP_K: int = Field(default=20, ge=1, le=100)
     RETRIEVAL_EMBEDDING_K: int = Field(default=20, ge=1, le=100)
@@ -79,6 +85,18 @@ class Settings(BaseSettings):
     def mongodb_uri_value(self) -> str | None:
         return self.MONGODB_URI.get_secret_value() if self.MONGODB_URI else None
 
+    @property
+    def supabase_admin_key_value(self) -> str | None:
+        if self.SUPABASE_SECRET_KEY:
+            return self.SUPABASE_SECRET_KEY.get_secret_value()
+        if self.SUPABASE_SERVICE_ROLE_KEY:
+            return self.SUPABASE_SERVICE_ROLE_KEY.get_secret_value()
+        return None
+
+    @property
+    def supabase_feedback_enabled(self) -> bool:
+        return bool(self.SUPABASE_URL and self.supabase_admin_key_value)
+
     @field_validator(
         "DATA_DIR",
         "CORPUS_PATH",
@@ -104,6 +122,28 @@ class Settings(BaseSettings):
         if any(not origin.startswith(("http://", "https://")) for origin in origins):
             raise ValueError("Each FRONTEND_ORIGINS value must start with http:// or https://")
         return ",".join(origins)
+
+    @field_validator("SUPABASE_URL", mode="after")
+    @classmethod
+    def validate_supabase_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().rstrip("/")
+        if not normalized:
+            return None
+        if not normalized.startswith(("http://", "https://")):
+            raise ValueError("SUPABASE_URL must start with http:// or https://")
+        return normalized
+
+    @field_validator("SUPABASE_FEEDBACK_TABLE", mode="after")
+    @classmethod
+    def validate_supabase_feedback_table(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("SUPABASE_FEEDBACK_TABLE must not be empty")
+        if not normalized.replace("_", "").isalnum():
+            raise ValueError("SUPABASE_FEEDBACK_TABLE may only contain letters, numbers, and underscores")
+        return normalized
 
     @field_validator("SQLITE_URL", mode="after")
     @classmethod
@@ -154,6 +194,12 @@ class Settings(BaseSettings):
                 errors.append("MONGODB_URI is required when RESULT_STORE=mongo")
             if not self.MONGODB_DATABASE:
                 errors.append("MONGODB_DATABASE is required when RESULT_STORE=mongo")
+
+        has_supabase_admin_key = bool(self.SUPABASE_SECRET_KEY or self.SUPABASE_SERVICE_ROLE_KEY)
+        if bool(self.SUPABASE_URL) != has_supabase_admin_key:
+            errors.append("SUPABASE_URL and one Supabase admin key must be set together")
+        if self.SUPABASE_SECRET_KEY and self.SUPABASE_SERVICE_ROLE_KEY:
+            errors.append("Set only one of SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY")
 
         if errors:
             raise ValueError("; ".join(errors))

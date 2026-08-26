@@ -15,6 +15,12 @@ export function toUserMessage(error: unknown): string {
         return 'Dịch vụ AI hiện chưa sẵn sàng. Vui lòng thử lại sau.'
       case 'RETRIEVAL_UNAVAILABLE':
         return 'Dịch vụ truy xuất nguồn thơ hiện chưa sẵn sàng.'
+      case 'FEEDBACK_STORE_NOT_CONFIGURED':
+        return 'Backend chưa cấu hình Supabase để lưu phản hồi.'
+      case 'FEEDBACK_STORE_UNAVAILABLE':
+      case 'FEEDBACK_STORE_REJECTED':
+      case 'FEEDBACK_STORE_INVALID_RESPONSE':
+        return 'Chưa thể lưu phản hồi vào Supabase. Vui lòng thử lại sau.'
       default:
         break
     }

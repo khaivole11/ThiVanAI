@@ -86,6 +86,9 @@ export interface GeneratedPoem {
   saved: boolean
   serverPersisted: boolean
   feedback?: string[]
+  feedbackRating?: number
+  feedbackComment?: string
+  feedbackSubmittedAt?: string
 
   backendStatus: BackendGenerationStatus
   validationPassed: boolean
