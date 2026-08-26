@@ -162,6 +162,48 @@ BM25_INDEX_PATH=./data/indexes/bm25/bm25_index.pkl
 SQLITE_URL=sqlite:///./data/app.db
 ```
 
+### Cấu hình Supabase để lưu feedback
+
+Backend đã có endpoint:
+
+```text
+POST /api/v1/generations/{generationId}/feedback
+```
+
+Các bước bật Supabase:
+
+1. Vào Supabase project, mở SQL Editor và chạy file:
+
+```text
+backend/supabase/feedback.sql
+```
+
+File này tạo bảng `public.generation_feedback` gồm `generation_id`, `rating`, `labels`, `comment`, `created_at`, bật RLS và không tạo policy public. Backend sẽ ghi dữ liệu bằng key server-side.
+
+2. Lấy Project URL và Secret key trong Supabase Dashboard. Supabase hiện khuyến nghị dùng key mới dạng `sb_secret_...` cho backend; nếu project cũ chỉ có legacy `service_role` key thì vẫn có thể dùng biến fallback.
+
+3. Thêm vào `backend/.env`:
+
+```env
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SECRET_KEY=sb_secret_...
+SUPABASE_FEEDBACK_TABLE=generation_feedback
+SUPABASE_TIMEOUT_SECONDS=10
+```
+
+Nếu dùng legacy key:
+
+```env
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<legacy-service-role-key>
+SUPABASE_FEEDBACK_TABLE=generation_feedback
+SUPABASE_TIMEOUT_SECONDS=10
+```
+
+Không đặt đồng thời `SUPABASE_SECRET_KEY` và `SUPABASE_SERVICE_ROLE_KEY`. Không đưa hai key này vào frontend hoặc commit vào git.
+
+4. Restart backend. Khi chưa cấu hình Supabase, endpoint feedback sẽ trả lỗi `FEEDBACK_STORE_NOT_CONFIGURED` để tránh giả vờ lưu thành công.
+
 ### Dùng Ollama
 
 Cấu hình mặc định trong `.env.example` dùng Ollama:
@@ -272,6 +314,16 @@ Lấy lịch sử sinh thơ:
 
 ```powershell
 Invoke-RestMethod "http://127.0.0.1:8001/api/v1/generations?page=1&page_size=20"
+```
+
+Gửi feedback cho một bài thơ đã sinh:
+
+```powershell
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8001/api/v1/generations/<generation-id>/feedback" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"rating":5,"labels":["relevant","structured"],"comment":"Bài thơ sát yêu cầu và mạch cảm xúc tốt."}'
 ```
 
 Lấy metadata:

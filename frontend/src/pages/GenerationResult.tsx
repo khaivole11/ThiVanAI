@@ -6,7 +6,7 @@ import SourceCard from "../components/SourceCard";
 import SourceDetailDrawer from "../components/SourceDetailDrawer";
 import Modal from "../components/Modal";
 import { showToast } from "../components/Toast";
-import { analyzePoem } from "../api/generations";
+import { analyzePoem, submitGenerationFeedback } from "../api/generations";
 import { isAbortError, toUserMessage } from "../api/errorMessages";
 import { getPoemById, savePoem } from "../store";
 import type { GeneratedPoem, PoemAnalysis, SourcePoem } from "../types";
@@ -19,6 +19,8 @@ const feedbackOptions = [
   { key: "irrelevant", label: "Chưa liên quan" },
   { key: "unnatural", label: "Ngôn ngữ chưa tự nhiên" },
 ];
+
+const ratingOptions = [1, 2, 3, 4, 5] as const;
 
 const quickRefinements = [
   "Giàu cảm xúc hơn",
@@ -228,6 +230,10 @@ export default function GenerationResult() {
   const [selectedFeedback, setSelectedFeedback] = useState<Set<string>>(
     new Set(),
   );
+  const [feedbackRating, setFeedbackRating] = useState<number | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [saveNote, setSaveNote] = useState("");
@@ -244,6 +250,10 @@ export default function GenerationResult() {
       setPoem(found);
       setSaveTitle(found.title);
       setAnalysis(found.analysis ?? null);
+      setSelectedFeedback(new Set(found.feedback ?? []));
+      setFeedbackRating(found.feedbackRating ?? null);
+      setFeedbackComment(found.feedbackComment ?? "");
+      setFeedbackSubmitted(Boolean(found.feedbackSubmittedAt));
     } else {
       setNotFound(true);
     }
@@ -356,6 +366,52 @@ export default function GenerationResult() {
       else next.add(key);
       return next;
     });
+  }
+
+  async function handleSubmitFeedback() {
+    if (!poem) return;
+
+    if (!feedbackRating) {
+      showToast("Vui lòng chọn mức đánh giá trước khi gửi.", "info");
+      return;
+    }
+
+    const labels = Array.from(selectedFeedback);
+    const comment = feedbackComment.trim();
+
+    setFeedbackSubmitting(true);
+
+    try {
+      const storedFeedback = await submitGenerationFeedback(poem.id, {
+        rating: feedbackRating,
+        labels,
+        comment: comment || undefined,
+      });
+
+      const updatedPoem: GeneratedPoem = {
+        ...poem,
+        feedback: storedFeedback.labels,
+        feedbackRating: storedFeedback.rating,
+        feedbackComment: storedFeedback.comment ?? "",
+        feedbackSubmittedAt: storedFeedback.createdAt,
+      };
+
+      setPoem(updatedPoem);
+      setFeedbackSubmitted(true);
+
+      try {
+        savePoem(updatedPoem);
+      } catch (storageError: unknown) {
+        console.warn("Failed to cache submitted feedback", storageError);
+      }
+
+      showToast("Đã lưu phản hồi vào Supabase. Cảm ơn bạn!", "success");
+    } catch (error: unknown) {
+      console.error("Failed to submit feedback", error);
+      showToast(toUserMessage(error), "error");
+    } finally {
+      setFeedbackSubmitting(false);
+    }
   }
 
   function handleRetryAnalysis() {
@@ -647,14 +703,45 @@ export default function GenerationResult() {
             <p className="text-sm text-[#7d8490] mb-4">
               Phản hồi của bạn giúp cải thiện hệ thống.
             </p>
+
+            <div className="mb-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mb-2">
+                Mức đánh giá
+              </p>
+              <div
+                className="flex flex-wrap items-center gap-2"
+                role="radiogroup"
+                aria-label="Mức đánh giá bài thơ"
+              >
+                {ratingOptions.map((rating) => (
+                  <button
+                    key={rating}
+                    type="button"
+                    role="radio"
+                    aria-checked={feedbackRating === rating}
+                    aria-label={`${rating} trên 5`}
+                    onClick={() => setFeedbackRating(rating)}
+                    className={`h-10 min-w-10 px-3 rounded-lg border text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] ${
+                      feedbackRating === rating
+                        ? "border-[#4f7a68] bg-[#eaf5ef] text-[#34745a]"
+                        : "border-[#d5d2ca] text-[#5f6673] hover:border-[#a8d4be]"
+                    }`}
+                  >
+                    {rating} <span aria-hidden="true">★</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div
               className="flex flex-wrap gap-2"
               role="group"
-              aria-label="Đánh giá bài thơ"
+              aria-label="Nhãn phản hồi bài thơ"
             >
               {feedbackOptions.map((fb) => (
                 <button
                   key={fb.key}
+                  type="button"
                   onClick={() => toggleFeedback(fb.key)}
                   aria-pressed={selectedFeedback.has(fb.key)}
                   className={`text-sm px-3 py-1.5 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#596789] ${
@@ -667,19 +754,38 @@ export default function GenerationResult() {
                 </button>
               ))}
             </div>
-            {selectedFeedback.size > 0 && (
+
+            <label
+              htmlFor="feedback-comment"
+              className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8490] mt-4 mb-2"
+            >
+              Ghi chú
+            </label>
+            <textarea
+              id="feedback-comment"
+              rows={3}
+              maxLength={2000}
+              value={feedbackComment}
+              onChange={(e) => setFeedbackComment(e.target.value)}
+              placeholder="Bạn muốn bài thơ tốt hơn ở điểm nào?"
+              className="w-full px-4 py-2.5 rounded-lg border border-[#d5d2ca] text-sm text-[#252932] placeholder:text-[#a8adb5] resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#596789]"
+            />
+
+            <div className="flex flex-wrap items-center gap-3 mt-4">
               <Button
                 size="sm"
                 variant="secondary"
-                className="mt-4"
-                onClick={() => {
-                  showToast("Cảm ơn phản hồi của bạn!", "success");
-                  setSelectedFeedback(new Set());
-                }}
+                loading={feedbackSubmitting}
+                onClick={handleSubmitFeedback}
               >
-                Gửi phản hồi
+                {feedbackSubmitted ? "Gửi lại phản hồi" : "Gửi phản hồi"}
               </Button>
-            )}
+              {feedbackSubmitted && (
+                <p className="text-xs text-[#34745a]">
+                  Phản hồi gần nhất đã được ghi nhận.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* New poem */}

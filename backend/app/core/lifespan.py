@@ -9,6 +9,10 @@ from app.adapters.retrieval.chroma_store import ChromaStoreAdapter
 from app.adapters.retrieval.bm25_index import BM25IndexAdapter
 from app.adapters.retrieval.artifact_manifest import ManifestManager
 from app.adapters.persistence.sqlite_repository import SQLiteResultRepository
+from app.adapters.persistence.supabase_feedback_repository import (
+    DisabledFeedbackRepository,
+    SupabaseFeedbackRepository,
+)
 from app.domain.rules.prompts import PromptBuilder
 from app.domain.rules.validators import PoetryValidator
 from app.domain.services.context_builder import ContextBuilderService
@@ -44,11 +48,18 @@ async def lifespan(app: FastAPI):
 
     # 3. Create the selected generator once. Optional packages load only here.
     if settings.GENERATION_PROVIDER == "openai":
-        from openai import AsyncOpenAI
+        import httpx
         from app.adapters.generators.openai_responses import OpenAIResponsesAdapter
 
-        client = AsyncOpenAI(api_key=settings.openai_api_key_value)
-        generator = OpenAIResponsesAdapter(client=client, model_name=settings.OPENAI_MODEL)
+        openai_api_key = settings.openai_api_key_value
+        if not openai_api_key or not settings.OPENAI_MODEL:
+            raise RuntimeError("OpenAI configuration is incomplete")
+        client = httpx.AsyncClient()
+        generator = OpenAIResponsesAdapter(
+            client=client,
+            model_name=settings.OPENAI_MODEL,
+            api_key=openai_api_key,
+        )
     else:
         import httpx
         from app.adapters.generators.ollama import OllamaAdapter
@@ -61,6 +72,19 @@ async def lifespan(app: FastAPI):
         )
 
     repository = SQLiteResultRepository(db_path=settings.SQLITE_URL)
+    if settings.supabase_feedback_enabled:
+        supabase_url = settings.SUPABASE_URL
+        supabase_admin_key = settings.supabase_admin_key_value
+        if not supabase_url or not supabase_admin_key:
+            raise RuntimeError("Supabase feedback configuration is incomplete")
+        feedback_repository = SupabaseFeedbackRepository(
+            supabase_url=supabase_url,
+            admin_key=supabase_admin_key,
+            table=settings.SUPABASE_FEEDBACK_TABLE,
+            timeout_seconds=settings.SUPABASE_TIMEOUT_SECONDS,
+        )
+    else:
+        feedback_repository = DisabledFeedbackRepository()
 
     retriever = HybridRetrieverService(chroma_store=chroma_adapter, bm25_index=bm25_adapter)
     orchestrator = GenerationOrchestrator(
@@ -86,6 +110,7 @@ async def lifespan(app: FastAPI):
     app.state.resources = resources
     app.state.retriever = retriever
     app.state.repository = repository
+    app.state.feedback_repository = feedback_repository
     app.state.orchestrator = orchestrator
     app.state.poem_analysis_service = poem_analysis_service
 
@@ -94,4 +119,5 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await generator.close()
+        await feedback_repository.close()
         logger.info("=== Closing FastAPI Lifespan resources ===")
