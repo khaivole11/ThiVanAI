@@ -3,33 +3,24 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any
 from rank_bm25 import BM25Okapi
+from app.domain.rules.metadata_filters import (
+    MetadataAliases,
+    metadata_matches_or,
+)
 
 def tokenize_vi(text: str) -> List[str]:
     text = str(text).lower()
     text = re.sub(r"[^\wÀ-ỹ\s]", " ", text, flags=re.UNICODE)
     return [token for token in text.split() if token]
 
-def same_text(a: Any, b: Any) -> bool:
-    return str(a or "").strip().casefold() == str(b or "").strip().casefold()
-
-def metadata_matches_or(metadata: dict, genre: str = None, author: str = None, period: str = None) -> bool:
-    conditions = []
-    if genre:
-        conditions.append(
-            same_text(metadata.get("genre"), genre) or same_text(metadata.get("specific_genre"), genre)
-        )
-    if author:
-        conditions.append(same_text(metadata.get("author"), author))
-    if period:
-        conditions.append(same_text(metadata.get("period"), period))
-
-    if not conditions:
-        return True
-    return any(conditions)
-
 class BM25IndexAdapter:
-    def __init__(self, artifact_path: str):
+    def __init__(
+        self,
+        artifact_path: str,
+        metadata_aliases: MetadataAliases | None = None,
+    ):
         self.artifact_path = Path(artifact_path)
+        self.metadata_aliases = metadata_aliases or {}
         self.bm25: BM25Okapi = None
         self.documents: List[Dict[str, Any]] = []
 
@@ -71,7 +62,13 @@ class BM25IndexAdapter:
 
         candidate_indices = [
             i for i, doc in enumerate(self.documents)
-            if metadata_matches_or(doc.get('metadata', doc), genre=genre, author=author, period=period)
+            if metadata_matches_or(
+                doc.get('metadata', doc),
+                genre=genre,
+                author=author,
+                period=period,
+                metadata_aliases=self.metadata_aliases,
+            )
         ]
 
         top_indices = sorted(

@@ -9,7 +9,7 @@
   },
   "context": {
     "separator": "\n\n====================\n\n",
-    "sourceTemplate": "Bài tham khảo {rank}\nTên bài: {title}\nTác giả: {author}\nThể thơ chung: {genre}\nThời kỳ: {period}\nURL: {url}\n\n{content}"
+    "sourceTemplate": "Bài tham khảo {rank}\nTên bài: {title}\nTác giả: {author}\nThể thơ chung: {genre}\nThể thơ cụ thể: {specific_genre}\nThời kỳ: {period}\nURL: {url}\n\n{content}"
   },
   "generationTitleTemplate": "Bài thơ {poetry_form} - {opening_excerpt}",
   "periods": [

@@ -10,6 +10,13 @@ Phong cách thời kỳ: {period_style}
 {retrieved_context}
 </reference_poems>
 
+Yêu cầu bắt buộc:
+- Chỉ trả nội dung bài thơ, không viết tiêu đề, không giải thích.
+- Giữ nguyên chính xác câu thơ đầu tiên.
+- Bài thơ sinh ra phải tuân thủ thể thơ đã chọn: {poetry_form}.
+- Trước khi trả lời, tự đếm số tiếng từng dòng và sửa lại mọi dòng sai luật.
+- Không sao chép nguyên văn nguồn tham khảo.
+
 {retry_feedback}
 
-Chỉ trả nội dung bài thơ; giữ nguyên câu đầu; không sao chép nguyên văn nguồn.
+Nếu có lỗi validation ở trên, chỉ trả phiên bản bài thơ đã sửa.

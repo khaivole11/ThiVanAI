@@ -1,6 +1,10 @@
 import numpy as np
 from typing import List, Dict, Any
 from app.domain.entities.source_poem import SourcePoem
+from app.domain.rules.metadata_filters import (
+    MetadataAliases,
+    metadata_matches_or,
+)
 
 def doc_key(item: dict) -> str:
     meta = item.get("metadata", item)
@@ -25,9 +29,15 @@ def normalize_score_dict(score_dict: Dict[str, float]) -> Dict[str, float]:
     }
 
 class HybridRetrieverService:
-    def __init__(self, chroma_store, bm25_index):
+    def __init__(
+        self,
+        chroma_store,
+        bm25_index,
+        metadata_aliases: MetadataAliases | None = None,
+    ):
         self.chroma_store = chroma_store
         self.bm25_index = bm25_index
+        self.metadata_aliases = metadata_aliases or {}
 
     def search(
         self,
@@ -81,6 +91,14 @@ class HybridRetrieverService:
         for key in all_keys:
             raw_item = embedding_docs.get(key) or bm25_docs.get(key)
             meta = raw_item.get('metadata', raw_item)
+            if not metadata_matches_or(
+                meta,
+                genre=genre,
+                author=author,
+                period=period,
+                metadata_aliases=self.metadata_aliases,
+            ):
+                continue
             
             e_score = norm_embedding.get(key, 0.0)
             b_score = norm_bm25.get(key, 0.0)
@@ -93,6 +111,7 @@ class HybridRetrieverService:
                 title=str(meta['title']),
                 author=str(meta['author']),
                 genre=str(meta.get('genre', '')),
+                specific_genre=str(meta.get('specific_genre', '')),
                 period=str(meta.get('period', '')),
                 content_excerpt=content,
                 url=str(meta.get('url', '')),

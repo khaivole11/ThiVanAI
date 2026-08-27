@@ -95,7 +95,10 @@ def run_ingestion():
             'url': row['url']
         })
         
-    bm25_adapter = BM25IndexAdapter(artifact_path=settings.BM25_INDEX_PATH)
+    bm25_adapter = BM25IndexAdapter(
+        artifact_path=settings.BM25_INDEX_PATH,
+        metadata_aliases=dict(resources.period_aliases),
+    )
     bm25_adapter.build_and_save(bm25_docs)
     print(f"Completed saving BM25 artifact at {settings.BM25_INDEX_PATH}")
 

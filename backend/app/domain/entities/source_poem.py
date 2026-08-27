@@ -9,6 +9,7 @@ class SourcePoem:
     genre: str
     period: str
     content_excerpt: str
+    specific_genre: str = ""
     url: Optional[str] = None
     rank: int = 0
     dense_score: float = 0.0

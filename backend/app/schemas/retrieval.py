@@ -18,6 +18,7 @@ class SourcePoemSchema(BaseModel):
     title: str
     author: str
     genre: str
+    specific_genre: str = Field("", alias="specificGenre")
     period: str
     content_excerpt: str = Field(..., alias="contentExcerpt")
     url: Optional[str] = None

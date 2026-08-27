@@ -30,6 +30,7 @@ export interface SourcePoem {
   author: string
   period: string
   poetryForm: string
+  specificGenre?: string
   excerpt: string
   url?: string
   matchTags: MatchTag[]
