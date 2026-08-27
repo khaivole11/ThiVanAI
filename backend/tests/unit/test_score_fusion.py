@@ -36,10 +36,10 @@ class LeakyChroma:
         return [
             {
                 "id": "form",
-                "content": "Match thể thơ",
+                "content": "Chỉ match thể thơ",
                 "metadata": {
                     "id": "form",
-                    "title": "Theo thể",
+                    "title": "Chỉ theo thể",
                     "author": "A",
                     "genre": "lục bát",
                     "specific_genre": "lục bát",
@@ -54,8 +54,8 @@ class LeakyChroma:
                     "id": "period",
                     "title": "Theo thời kỳ",
                     "author": "B",
-                    "genre": "tám chữ",
-                    "specific_genre": "tám chữ",
+                    "genre": "lục bát",
+                    "specific_genre": "lục bát",
                     "period": "Hiện đại",
                 },
                 "distance": 0.2,
@@ -67,8 +67,8 @@ class LeakyChroma:
                     "id": "author",
                     "title": "Theo tác giả",
                     "author": "Nguyễn Du",
-                    "genre": "bảy chữ",
-                    "specific_genre": "thất ngôn bát cú",
+                    "genre": "lục bát",
+                    "specific_genre": "lục bát",
                     "period": "Trần",
                 },
                 "distance": 0.3,
@@ -101,6 +101,22 @@ def test_hybrid_retriever_enforces_metadata_or_after_fusion():
         genre="Lục bát",
         period="Hiện đại",
         author="Nguyễn Du",
+        top_k=10,
+        embedding_k=20,
+        bm25_k=20,
+        alpha=0.65,
+    )
+
+    assert {result.poem_id for result in results} == {"period", "author"}
+    assert "form" not in {result.poem_id for result in results}
+    assert "none" not in {result.poem_id for result in results}
+
+
+def test_hybrid_retriever_uses_poetry_form_when_no_author_or_period():
+    retriever = HybridRetrieverService(chroma_store=LeakyChroma(), bm25_index=EmptyBM25())
+    results = retriever.search(
+        query="nắng hồng",
+        genre="Lục bát",
         top_k=10,
         embedding_k=20,
         bm25_k=20,

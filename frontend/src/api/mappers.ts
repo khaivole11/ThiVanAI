@@ -63,11 +63,13 @@ function deriveMatchTags(
   const tags: MatchTag[] = []
 
   if (
-    samePoetryForm(source.genre, request.poetryForm) ||
-    samePoetryForm(source.specificGenre, request.poetryForm)
+    request.poetryForm &&
+    (samePoetryForm(source.genre, request.poetryForm) ||
+      samePoetryForm(source.specificGenre, request.poetryForm))
   ) {
     tags.push({ key: 'same-form', label: 'Cùng thể thơ' })
   }
+
   if (
     request.authorStyle &&
     normalize(source.author) === normalize(request.authorStyle)

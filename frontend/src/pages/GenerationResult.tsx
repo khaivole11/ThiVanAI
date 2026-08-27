@@ -811,8 +811,8 @@ export default function GenerationResult() {
                 để hỗ trợ quá trình sáng tác.
               </p>
               <div className="bg-[#edf5fa] border border-[#b8d5e7] rounded-lg p-2.5 text-xs text-[#2c5271] mb-4 leading-relaxed">
-                Một bài thơ có thể được chọn khi phù hợp với ít nhất một tiêu
-                chí: thể thơ, tác giả hoặc thời kỳ sáng tác.
+                Nguồn tham khảo luôn cần cùng thể thơ. Nếu có chọn tác giả hoặc
+                thời kỳ, nguồn cần khớp ít nhất một tiêu chí đó.
               </div>
               <div className="space-y-3 overflow-y-auto max-h-[60vh] scrollbar-hide pr-1">
                 {poem.sources.map((source) => (

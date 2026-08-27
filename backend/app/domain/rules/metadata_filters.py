@@ -73,6 +73,14 @@ def poetry_form_value_variants(value: Any) -> list[str]:
     return metadata_value_variants(value, POETRY_FORM_ALIASES)
 
 
+def combine_chroma_filters(filters: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not filters:
+        return None
+    if len(filters) == 1:
+        return filters[0]
+    return {"$or": filters}
+
+
 def build_chroma_metadata_or_filter(
     genre: str | None = None,
     author: str | None = None,
@@ -80,26 +88,36 @@ def build_chroma_metadata_or_filter(
     *,
     metadata_aliases: MetadataAliases | None = None,
 ) -> dict[str, Any] | None:
-    filters: list[dict[str, Any]] = []
+    form_filters: list[dict[str, Any]] = []
+    style_filters: list[dict[str, Any]] = []
 
     if genre:
         for value in poetry_form_value_variants(genre):
-            filters.append({"genre": {"$eq": value}})
-            filters.append({"specific_genre": {"$eq": value}})
+            form_filters.append({"genre": {"$eq": value}})
+            form_filters.append({"specific_genre": {"$eq": value}})
 
     if period:
         for value in metadata_value_variants(period, metadata_aliases):
-            filters.append({"period": {"$eq": value}})
+            style_filters.append({"period": {"$eq": value}})
 
     if author:
         for value in metadata_value_variants(author):
-            filters.append({"author": {"$eq": value}})
+            style_filters.append({"author": {"$eq": value}})
 
-    if not filters:
+    clauses = [
+        clause
+        for clause in (
+            combine_chroma_filters(form_filters),
+            combine_chroma_filters(style_filters),
+        )
+        if clause is not None
+    ]
+
+    if not clauses:
         return None
-    if len(filters) == 1:
-        return filters[0]
-    return {"$or": filters}
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
 
 
 def metadata_matches_or(
@@ -110,24 +128,23 @@ def metadata_matches_or(
     *,
     metadata_aliases: MetadataAliases | None = None,
 ) -> bool:
-    conditions: list[bool] = []
-
-    if genre:
-        conditions.append(
-            metadata_value_matches(
-                metadata.get("genre"),
-                genre,
-                aliases=POETRY_FORM_ALIASES,
-            )
-            or metadata_value_matches(
-                metadata.get("specific_genre"),
-                genre,
-                aliases=POETRY_FORM_ALIASES,
-            )
+    if genre and not (
+        metadata_value_matches(
+            metadata.get("genre"),
+            genre,
+            aliases=POETRY_FORM_ALIASES,
         )
+        or metadata_value_matches(
+            metadata.get("specific_genre"),
+            genre,
+            aliases=POETRY_FORM_ALIASES,
+        )
+    ):
+        return False
 
+    style_conditions: list[bool] = []
     if period:
-        conditions.append(
+        style_conditions.append(
             metadata_value_matches(
                 metadata.get("period"),
                 period,
@@ -136,8 +153,8 @@ def metadata_matches_or(
         )
 
     if author:
-        conditions.append(metadata_value_matches(metadata.get("author"), author))
+        style_conditions.append(metadata_value_matches(metadata.get("author"), author))
 
-    if not conditions:
+    if not style_conditions:
         return True
-    return any(conditions)
+    return any(style_conditions)

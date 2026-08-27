@@ -148,19 +148,25 @@ export default function SourceDetailDrawer({
               Lý do được chọn
             </h3>
             <div className="flex flex-wrap gap-2 mb-3">
-              {source.matchTags.map((tag) => (
-                <Badge
-                  key={tag.key}
-                  variant={matchTagVariants[tag.key] || "default"}
-                >
-                  {tag.label}
-                </Badge>
-              ))}
+              {source.matchTags.length === 0 ? (
+                <Badge variant="default">Tương đồng nội dung</Badge>
+              ) : (
+                source.matchTags.map((tag) => (
+                  <Badge
+                    key={tag.key}
+                    variant={matchTagVariants[tag.key] || "default"}
+                  >
+                    {tag.label}
+                  </Badge>
+                ))
+              )}
             </div>
             <p className="text-sm text-[#5f6673] leading-relaxed">
-              Bài thơ này được chọn vì{" "}
-              {source.matchTags.map((t) => t.label.toLowerCase()).join(", ")}{" "}
-              với yêu cầu của bạn.
+              {source.matchTags.length === 0
+                ? "Bài thơ này được chọn theo độ tương đồng nội dung với câu thơ mở đầu."
+                : `Bài thơ này được chọn vì ${source.matchTags
+                    .map((t) => t.label.toLowerCase())
+                    .join(", ")} với yêu cầu của bạn.`}
             </p>
           </section>
 
