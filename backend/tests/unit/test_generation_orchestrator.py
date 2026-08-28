@@ -90,6 +90,20 @@ def test_generation_retries_and_saves_only_when_poem_passes_validation():
     assert "Các lỗi validation ở lần trước" in generator.prompts[1]
 
 
+def test_generation_continues_when_retrieval_returns_no_sources():
+    valid_poem = "Gà kia ai rán mà giòn\nNồi cơm thơm tỏa khắp cả gian nhà"
+    generator = FakeGenerator([valid_poem])
+    repository = RecordingRepository()
+    orchestrator = make_orchestrator(generator, repository)
+
+    result = run_generation(orchestrator)
+
+    assert result.sources == []
+    assert result.validation_passed is True
+    assert len(repository.saved) == 1
+    assert "Không tìm thấy bài thơ tham khảo phù hợp." in generator.prompts[0]
+
+
 def test_generation_raises_when_validation_still_fails_after_retries():
     invalid_poem = "Gà kia ai rán mà giòn\nNồi cơm sôi sùng sục, thơm lừng"
     generator = FakeGenerator([invalid_poem, invalid_poem])

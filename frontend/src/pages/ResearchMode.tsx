@@ -40,7 +40,7 @@ export default function ResearchMode() {
   const [topK, setTopK] = useState(5);
   const [embeddingK, setEmbeddingK] = useState(20);
   const [bm25K, setBm25K] = useState(20);
-  const [alpha, setAlpha] = useState(0.65);
+  const [alpha, setAlpha] = useState(0.35);
 
   const [activeOperation, setActiveOperation] =
     useState<ActiveOperation>(null);

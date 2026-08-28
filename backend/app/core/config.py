@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     RETRIEVAL_EMBEDDING_K: int = Field(default=20, ge=1, le=100)
     RETRIEVAL_BM25_K: int = Field(default=20, ge=1, le=100)
     RETRIEVAL_MAX_CANDIDATE_K: int = Field(default=100, ge=1, le=1000)
-    RETRIEVAL_ALPHA: float = Field(default=0.65, ge=0.0, le=1.0)
+    RETRIEVAL_ALPHA: float = Field(default=0.35, ge=0.0, le=1.0)
     CONTEXT_MAX_CHARACTERS: int = Field(default=12000, ge=1000, le=100000)
     GENERATION_TEMPERATURE: float = Field(default=0.7, ge=0.0, le=2.0)
     GENERATION_MAX_OUTPUT_TOKENS: int = Field(default=512, ge=64, le=8192)

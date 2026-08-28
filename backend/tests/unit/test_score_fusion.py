@@ -31,6 +31,41 @@ def test_hybrid_fusion_min_max():
     assert results[0].hybrid_score >= results[1].hybrid_score
 
 
+class OpposedDense:
+    def search(self, query, genre=None, author=None, period=None, *, limit):
+        return [
+            {"id": "dense", "content": "Dense thắng", "metadata": {"id": "dense", "title": "Dense", "author": "A"}, "distance": 0.0},
+            {"id": "bm25", "content": "BM25 thắng", "metadata": {"id": "bm25", "title": "BM25", "author": "B"}, "distance": 9.0},
+        ]
+
+
+class OpposedBM25:
+    def search(self, query, genre=None, author=None, period=None, *, limit):
+        return [
+            {"id": "dense", "title": "Dense", "author": "A", "content": "Dense thắng", "score": 0.0},
+            {"id": "bm25", "title": "BM25", "author": "B", "content": "BM25 thắng", "score": 10.0},
+        ]
+
+
+def test_hybrid_fusion_prefers_bm25_with_dense_alpha_035():
+    retriever = HybridRetrieverService(
+        chroma_store=OpposedDense(),
+        bm25_index=OpposedBM25(),
+    )
+
+    results = retriever.search(
+        query="nắng hồng",
+        top_k=2,
+        embedding_k=20,
+        bm25_k=20,
+        alpha=0.35,
+    )
+
+    assert [result.poem_id for result in results] == ["bm25", "dense"]
+    assert results[0].hybrid_score == 0.65
+    assert results[1].hybrid_score == 0.35
+
+
 class LeakyChroma:
     def search(self, query, genre=None, author=None, period=None, *, limit):
         return [
