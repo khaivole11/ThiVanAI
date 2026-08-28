@@ -26,6 +26,16 @@ class PoetryConstraintError(AppError):
             retryable=False
         )
 
+class GenerationValidationError(AppError):
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            code="GENERATION_VALIDATION_FAILED",
+            message=message,
+            details=details,
+            retryable=True
+        )
+
 class RetrievalNotReadyError(AppError):
     def __init__(self, message: str = "Retriever index vector/sparse not ready yet."):
         super().__init__(

@@ -24,6 +24,7 @@ export interface SourcePoemDto {
   title: string;
   author: string;
   genre: string;
+  specificGenre?: string;
   period: string;
   contentExcerpt: string;
   url: string | null;

@@ -101,8 +101,10 @@ export default function ResearchMode() {
   }
 
   async function handleRetrieval() {
-    if (!openingVerse.trim()) {
-      setRunError("Vui lòng nhập câu thơ mở đầu trước khi chạy retrieval.");
+    if (!openingVerse.trim() || !poetryForm) {
+      setRunError(
+        "Vui lòng nhập câu thơ mở đầu và chọn thể thơ trước khi chạy retrieval.",
+      );
       return;
     }
 
@@ -128,7 +130,7 @@ export default function ResearchMode() {
       const response = await searchPoems(
         {
           firstVerse: requestContext.firstVerse,
-          ...(poetryForm ? { genre: poetryForm } : {}),
+          genre: poetryForm,
           ...(authorStyle.trim()
             ? { author: authorStyle.trim() }
             : {}),
@@ -284,7 +286,7 @@ export default function ResearchMode() {
                   <option value="">
                     {metadataLoading
                       ? "Đang tải thể thơ..."
-                      : "Không lọc thể thơ"}
+                      : "Chọn thể thơ"}
                   </option>
                   {poetryForms.map((form) => (
                     <option key={form.key} value={form.value}>
@@ -293,7 +295,8 @@ export default function ResearchMode() {
                   ))}
                 </select>
                 <p className="text-xs text-[#7d8490] mt-1">
-                  Retrieval có thể để trống; generation bắt buộc chọn.
+                  Retrieval luôn lọc theo thể thơ; tác giả/thời kỳ là điều kiện
+                  bổ sung.
                 </p>
               </div>
 

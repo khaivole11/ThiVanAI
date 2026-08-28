@@ -19,6 +19,7 @@ class ContextBuilderService:
                 "title": src.title,
                 "author": src.author,
                 "genre": src.genre,
+                "specific_genre": src.specific_genre,
                 "period": src.period,
                 "url": src.url or "",
             }

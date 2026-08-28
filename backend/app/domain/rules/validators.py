@@ -29,16 +29,16 @@ class PoetryValidator:
             raw_errors.append({
                 "line_number": None,
                 "line": None,
-                "expected": f"exactly {spec.required_line_count} lines",
-                "actual": f"{len(lines)} lines",
+                "expected": f"đúng {spec.required_line_count} dòng",
+                "actual": f"{len(lines)} dòng",
             })
 
         if spec.stanza_multiple is not None and len(lines) % spec.stanza_multiple != 0:
             raw_errors.append({
                 "line_number": None,
                 "line": None,
-                "expected": f"a line count divisible by {spec.stanza_multiple}",
-                "actual": f"{len(lines)} lines",
+                "expected": f"số dòng chia hết cho {spec.stanza_multiple}",
+                "actual": f"{len(lines)} dòng",
             })
 
         if spec.line_pattern:
@@ -49,20 +49,20 @@ class PoetryValidator:
                     raw_errors.append(make_error(
                         line_number,
                         line,
-                        f"{expected} syllables",
-                        f"{actual} syllables",
+                        f"{expected} tiếng",
+                        f"{actual} tiếng",
                     ))
 
         messages: list[str] = []
         for err in raw_errors:
             if err["line_number"] is None:
                 messages.append(
-                    f"Invalid poem structure: expected {err['expected']}; received {err['actual']}."
+                    f"Cấu trúc bài thơ chưa đúng: cần {err['expected']}; hiện có {err['actual']}."
                 )
             else:
                 messages.append(
-                    f"Line {err['line_number']} ({err['line']!r}): "
-                    f"expected {err['expected']}; received {err['actual']}."
+                    f"Dòng {err['line_number']} ({err['line']!r}): "
+                    f"cần {err['expected']}; hiện có {err['actual']}."
                 )
 
         return not messages, messages

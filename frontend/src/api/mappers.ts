@@ -9,15 +9,67 @@ function normalize(value: string): string {
   return value.normalize('NFKC').trim().toLocaleLowerCase('vi-VN')
 }
 
+const poetryFormAliasGroups = [
+  ['lục bát'],
+  ['thơ bảy chữ', 'bảy chữ'],
+  [
+    'thất ngôn bát cú đường luật',
+    'thất ngôn bát cú',
+    'đường luật',
+    'đường luật biến thể',
+  ],
+  ['thất ngôn tứ tuyệt'],
+  ['thơ tám chữ', 'tám chữ'],
+  ['thơ tự do', 'tự do'],
+  ['thơ năm chữ', 'năm chữ'],
+  ['thơ bốn chữ', 'bốn chữ', 'tứ ngôn'],
+  ['thơ sáu chữ', 'sáu chữ'],
+  ['song thất lục bát'],
+]
+
+function poetryFormVariants(value: string | undefined): Set<string> {
+  const normalized = normalize(value ?? '')
+  if (!normalized) return new Set()
+
+  const variants = new Set([normalized])
+  if (normalized.startsWith('thơ ')) {
+    variants.add(normalized.slice(4).trim())
+  } else {
+    variants.add(`thơ ${normalized}`)
+  }
+
+  for (const group of poetryFormAliasGroups) {
+    if (group.includes(normalized)) {
+      group.forEach((item) => variants.add(item))
+    }
+  }
+
+  return variants
+}
+
+function samePoetryForm(
+  sourceValue: string | undefined,
+  requestValue: string,
+): boolean {
+  const sourceVariants = poetryFormVariants(sourceValue)
+  const requestVariants = poetryFormVariants(requestValue)
+  return [...sourceVariants].some((item) => requestVariants.has(item))
+}
+
 function deriveMatchTags(
   source: SourcePoemDto,
   request: GeneratePoemRequestDto,
 ): MatchTag[] {
   const tags: MatchTag[] = []
 
-  if (normalize(source.genre) === normalize(request.poetryForm)) {
+  if (
+    request.poetryForm &&
+    (samePoetryForm(source.genre, request.poetryForm) ||
+      samePoetryForm(source.specificGenre, request.poetryForm))
+  ) {
     tags.push({ key: 'same-form', label: 'Cùng thể thơ' })
   }
+
   if (
     request.authorStyle &&
     normalize(source.author) === normalize(request.authorStyle)
@@ -44,7 +96,8 @@ export function mapSourcePoem(
     title: source.title,
     author: source.author,
     period: source.period,
-    poetryForm: source.genre,
+    poetryForm: source.specificGenre?.trim() || source.genre,
+    specificGenre: source.specificGenre,
     excerpt: source.contentExcerpt,
     url: source.url ?? undefined,
     matchTags: deriveMatchTags(source, request),

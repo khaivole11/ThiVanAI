@@ -3,7 +3,7 @@ from typing import Optional
 
 class SearchRequest(BaseModel):
     first_verse: str = Field(..., alias="firstVerse", description="Câu mở đầu bài thơ")
-    genre: Optional[str] = Field(None, description="Thể loại thơ")
+    genre: Optional[str] = Field(None, description="Thể thơ bắt buộc khớp khi được cung cấp")
     author: Optional[str] = Field(None, description="Tác giả")
     period: Optional[str] = Field(None, description="Thời kỳ")
     top_k: Optional[int] = Field(None, alias="topK", ge=1)
@@ -18,6 +18,7 @@ class SourcePoemSchema(BaseModel):
     title: str
     author: str
     genre: str
+    specific_genre: str = Field("", alias="specificGenre")
     period: str
     content_excerpt: str = Field(..., alias="contentExcerpt")
     url: Optional[str] = None

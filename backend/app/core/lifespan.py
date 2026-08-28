@@ -40,7 +40,10 @@ async def lifespan(app: FastAPI):
         metadata_aliases=dict(resources.period_aliases),
         create_if_missing=False,
     )
-    bm25_adapter = BM25IndexAdapter(artifact_path=settings.BM25_INDEX_PATH)
+    bm25_adapter = BM25IndexAdapter(
+        artifact_path=settings.BM25_INDEX_PATH,
+        metadata_aliases=dict(resources.period_aliases),
+    )
     bm25_adapter.load()
 
     if settings.RESULT_STORE != "sqlite":
@@ -86,7 +89,11 @@ async def lifespan(app: FastAPI):
     else:
         feedback_repository = DisabledFeedbackRepository()
 
-    retriever = HybridRetrieverService(chroma_store=chroma_adapter, bm25_index=bm25_adapter)
+    retriever = HybridRetrieverService(
+        chroma_store=chroma_adapter,
+        bm25_index=bm25_adapter,
+        metadata_aliases=dict(resources.period_aliases),
+    )
     orchestrator = GenerationOrchestrator(
         retriever_service=retriever,
         context_builder=ContextBuilderService(resources, settings.CONTEXT_MAX_CHARACTERS),

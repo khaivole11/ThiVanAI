@@ -2,14 +2,7 @@ import chromadb
 from typing import List, Dict, Any
 from app.ports.vector_store import IVectorStore
 from app.adapters.embeddings.sentence_transformers import SentenceTransformersAdapter
-
-def metadata_value_variants(value: str, aliases: Dict[str, tuple[str, ...]]) -> List[str]:
-    if not value:
-        return []
-    text = str(value).strip()
-    variants = [text, text.lower(), text.title()]
-    variants.extend(aliases.get(text, ()))
-    return list(dict.fromkeys(v for v in variants if v))
+from app.domain.rules.metadata_filters import build_chroma_metadata_or_filter
 
 class ChromaStoreAdapter(IVectorStore):
     def __init__(
@@ -40,24 +33,12 @@ class ChromaStoreAdapter(IVectorStore):
         limit: int,
     ) -> List[Dict[str, Any]]:
         query_vec = self.embedder.embed_queries([query])[0]
-        
-        filters = []
-        if genre:
-            for val in metadata_value_variants(genre, self.metadata_aliases):
-                filters.append({"genre": {"$eq": val}})
-                filters.append({"specific_genre": {"$eq": val}})
-        if period:
-            for val in metadata_value_variants(period, self.metadata_aliases):
-                filters.append({"period": {"$eq": val}})
-        if author:
-            for val in metadata_value_variants(author, self.metadata_aliases):
-                filters.append({"author": {"$eq": val}})
-                
-        where_clause = None
-        if len(filters) == 1:
-            where_clause = filters[0]
-        elif len(filters) > 1:
-            where_clause = {"$or": filters}
+        where_clause = build_chroma_metadata_or_filter(
+            genre=genre,
+            author=author,
+            period=period,
+            metadata_aliases=self.metadata_aliases,
+        )
 
         results = self.collection.query(
             query_embeddings=[query_vec],

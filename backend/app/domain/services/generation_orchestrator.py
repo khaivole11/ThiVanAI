@@ -3,6 +3,7 @@ import uuid
 from typing import List
 
 from app.core.resources import DomainResources
+from app.core.errors import GenerationValidationError
 from app.ports.generator import GenerationInput
 from app.domain.enums.poetry_form import PoetryForm
 from app.domain.enums.generation_status import GenerationStatus
@@ -105,16 +106,29 @@ class GenerationOrchestrator:
 
             validation_passed, validation_errors = self.validator.validate(poetry_form, lines)
             if not lines or lines[0] != first_verse:
-                validation_errors.append("The first generated line must exactly match the opening verse.")
+                validation_errors.append("Dòng đầu tiên phải giữ nguyên chính xác câu mở đầu.")
                 validation_passed = False
             generated_lines = lines
             
             if not validation_passed:
-                retry_feedback = "\n".join([f"- {err}" for err in validation_errors])
+                retry_feedback = (
+                    "Các lỗi validation ở lần trước, bắt buộc sửa hết trước khi trả lời:\n"
+                    + "\n".join([f"- {err}" for err in validation_errors])
+                )
                 
         timings['generation_ms'] = round((time.time() - t2) * 1000, 2)
+
+        if not validation_passed:
+            raise GenerationValidationError(
+                "Generated poem did not satisfy the selected poetry form after validation retries",
+                details={
+                    "poetryForm": poetry_form.value,
+                    "attemptCount": attempts,
+                    "validationErrors": validation_errors,
+                },
+            )
         
-        status = GenerationStatus.COMPLETED if validation_passed else GenerationStatus.COMPLETED_WITH_WARNINGS
+        status = GenerationStatus.COMPLETED
         full_text = "\n".join(generated_lines)
         opening_excerpt = first_verse[: self.title_excerpt_characters]
         title = self.resources.generation_title_template.format(

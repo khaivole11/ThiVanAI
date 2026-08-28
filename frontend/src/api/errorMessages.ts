@@ -13,7 +13,10 @@ export function toUserMessage(error: unknown): string {
     switch (error.code) {
       case 'GENERATOR_UNAVAILABLE':
         return 'Dịch vụ AI hiện chưa sẵn sàng. Vui lòng thử lại sau.'
+      case 'GENERATION_VALIDATION_FAILED':
+        return 'Hệ thống chưa tạo được bài thơ đúng thể thơ sau nhiều lần thử. Vui lòng thử lại hoặc đổi câu mở đầu.'
       case 'RETRIEVAL_UNAVAILABLE':
+      case 'RETRIEVAL_NOT_READY':
         return 'Dịch vụ truy xuất nguồn thơ hiện chưa sẵn sàng.'
       case 'FEEDBACK_STORE_NOT_CONFIGURED':
         return 'Backend chưa cấu hình Supabase để lưu phản hồi.'
